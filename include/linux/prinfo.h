@@ -1,3 +1,6 @@
+#include <linux/types.h>
+
+
 struct prinfo {
   int64_t state;            /* current state of process */
   pid_t   pid;              /* process id */
