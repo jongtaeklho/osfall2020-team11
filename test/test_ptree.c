@@ -39,16 +39,15 @@ int main()
     //error handling
     if (entire_proc < 0)
     {
-        if (buf == NULL || &nr == NULL || nr < 1)
+        printf("errno: %d\n", errno);
+        if (errno == EINVAL)
         {
-            errno = EINVAL;
             perror("Ptree error : buf/nr is NULL or nr is less than 1");
             printf("Address of buf: %p\n", buf);
             printf("Address of nr: %p\n", &nr);
         }
-        else
+        else if(errno == EFAULT)
         {
-            errno = EFAULT;
             perror("Ptree error : buf/nr is outside of the accessible address space");
             printf("Address of buf: %p\n", buf);
             printf("Address of nr: %p\n", &nr);
@@ -61,7 +60,8 @@ int main()
         // print process tree
         for (j = 0; j < indent; j++)
             printf("\t");
-        printf("%s,%d,%lld,%d,%d,%d,%lld\n", buf[i].comm, buf[i].pid, buf[i].state, buf[i].parent_pid, buf[i].first_child_pid, buf[i].next_sibling_pid, buf[i].uid);
+        printf("%s,%d,%lld,%d,%d,%d,%lld\n", buf[i].comm, buf[i].pid, buf[i].state, buf[i].parent_pid, 
+            buf[i].first_child_pid, buf[i].next_sibling_pid, buf[i].uid);
 
         if (buf[i].next_sibling_pid != 0)
         { // another branch exists
