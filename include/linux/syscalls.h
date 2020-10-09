@@ -944,9 +944,7 @@ asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  
 
 /* OS project 1*/
-extern struct prinfo;
-
-// asmlinkage long sys_myprint(void);
+struct prinfo;
 
 asmlinkage int sys_ptree(struct prinfo *buf, int *nr);
 			  
