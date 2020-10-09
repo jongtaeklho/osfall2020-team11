@@ -30,11 +30,11 @@ int main()
         level[i] = 0;
     }
     buf = calloc(nr, sizeof(struct prinfo));
-    printf("Value of nr before ptree: %d\n", nr);
+    // printf("Value of nr before ptree: %d\n", nr);
 
     entire_proc = syscall(398, buf, &nr);
-    printf("Return value of ptree: %d\n", entire_proc);
-    printf("Value of nr after ptree: %d\n", nr);
+    // printf("Return value of ptree: %d\n", entire_proc);
+    // printf("Value of nr after ptree: %d\n", nr);
 
     //error handling
     if (entire_proc < 0)
