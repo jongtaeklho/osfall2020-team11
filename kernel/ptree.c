@@ -1,39 +1,84 @@
-/*
- * rootfs.img is in tizen-image
- * mount: sudo mount rootfs.img ~/emulator/mnt_dir, sudo umount ~/emulator/mnt_dir
- *  
- */
-
-/* put this file as kernel/ptree.c
-*/
-
+#include <linux/slab.h>
 #include <linux/prinfo.h>
 #include <linux/sched/task.h>
-#include <linux/sched.h>
 #include <linux/list.h>
+#include <linux/uaccess.h>
+#include <linux/cred.h>
 
-#define __USE_GNU
+void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)
+{
+  struct task_struct *child, *first_child, *next_sibling;
+  (*true_cnt)++;
+  if (*curr_cnt < max_cnt)
+  {
+    first_child = list_first_entry_or_null(&(task->children), struct task_struct, sibling);
+    next_sibling = list_first_entry_or_null(&(task->sibling), struct task_struct, sibling);
 
-/*  put prinfo in include/linux/prinfo.h as part of the solution  */
-struct prinfo {
-  int64_t state;            /* current state of process */
-  pid_t   pid;              /* process id */
-  pid_t   parent_pid;       /* process id of parent */
-  pid_t   first_child_pid;  /* pid of oldest child */
-  pid_t   next_sibling_pid; /* pid of younger sibling */
-  int64_t uid;              /* user id of process owner */
-  char    comm[64];         /* name of program executed */
-};
+    process_infos[*curr_cnt].state = task->state;
+    process_infos[*curr_cnt].pid = task->pid;
+    process_infos[*curr_cnt].parent_pid = task->parent->pid;
+    process_infos[*curr_cnt].first_child_pid = (first_child != NULL) ? first_child->pid : 0;
+    process_infos[*curr_cnt].next_sibling_pid = (next_sibling != NULL) ? next_sibling->pid : 0;
+    process_infos[*curr_cnt].uid = (task->cred->uid).val;
+    strncpy(process_infos[(*curr_cnt)++].comm, task->comm, 64);
 
-
-/* ptree implementation */
-SYSCALL_DEFINE2(ptree, struct prinfo *, buf, int *, nr){
-  INIT_LIST_HEAD(getpid(prinfo->pid));
-  
-  read_lock(&tasklist_lock);
-  /* do the job... */
-  read_unlock(&tasklist_lock);
-  return 0;
+    list_for_each_entry(child, &task->children, sibling)
+    {
+      process_tree_traversal(process_infos, child, max_cnt, curr_cnt, true_cnt);
+    }
+  }
+  return;
 }
 
+/* ptree implementation */
+
+static int nr_max;
+// buf: buffer of process process_info
+// nr: # of struct prinfo entries
+asmlinkage int sys_ptree(struct prinfo *buf, int *nr)
+{
+  struct prinfo *process_infos;
+  int proc_cnt;
+  int true_cnt;
+  printk("ptree start");
+  // -EINVAL: if buf or nr are null, or if the number of entries is less than 1
+  // -EFAULT: if buf or nr are outside the accessible address space.
+  if ((buf == NULL) || (nr == NULL))
+    return -EINVAL;
+  if (access_ok(VERIFY_READ, nr, sizeof(int)) == 0)
+    return -EFAULT;
+
+  if (copy_from_user(&nr_max, nr, sizeof(int) != 0))
+  { // don't use user memory space in kernel directly
+    printk("Could not copy nr from user.\n");
+  }
+
+  if (nr_max < 1)
+    return -EINVAL;
+  if (access_ok(VERIFY_READ, buf, nr_max * sizeof(struct prinfo)) == 0)
+    return -EFAULT;
+
+  process_infos = kmalloc(nr_max * sizeof(struct prinfo), GFP_KERNEL);
+  proc_cnt = 0;
+  true_cnt = 0;
+
+  read_lock(&tasklist_lock);
+  process_tree_traversal(process_infos, &init_task, nr_max, &proc_cnt, &true_cnt);
+  read_unlock(&tasklist_lock);
+
+  if (copy_to_user(buf, process_infos, proc_cnt * sizeof(struct prinfo)) != 0)
+  {
+    printk("Could not copy buf to user.\n");
+  }
+  if (nr_max > proc_cnt)
+  {
+    if (copy_to_user(nr, &(proc_cnt), sizeof(int)) != 0)
+    {
+      printk("Could not copy nr to user.\n");
+    }
+  }
+  kfree(process_infos);
+  printk("ptree done\n");
+  return true_cnt;
+}
 
