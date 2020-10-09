@@ -31,10 +31,10 @@ the problems which may result by upgrading your kernel.
 5. 커널 Makefile(`kernel/Makefile`)에 `obj-y +=ptree.o` 를 추가해 컴파일될 수 있도록 한다.
 6. `./build-rpi3-arm64.sh`을 실행하여 변경된 커널을 컴파일한다.
 # Design & Implementation
-1. `int sys_ptree(struct prinfo *buf, int *nr)`
+1. `int sys_ptree(struct prinfo *buf, int *nr)`  
 `sys_ptree()`을 실행하면 우선 error 상황을 확인한다. `buf` 또는 `nr` 포인터가 `NULL`을 가리키거나, entry 개수가 1 미만인 등 함수 argument에 문제가 있다면 `-EINVAL`을 반환한다. access_ok를 통해 `nr`, `buf`를 확인하여 access 불가능할 경우 `-EFAULT`를 반환한다.
 커널 프로그램에서 user memory space에 계속 접근하는 것은 커널 패닉을 일으킬 수 있으므로, 입력된 `nr` 값을 `nr_max`에 재할당한다. 이제 프로세스 트리를 만들 준비가 끝났으면 `process_tree_traversal()` 함수를 실행하여 preorder로 각 프로세스 정보를 확인하고 `process_info`에 저장한다. 이 과정에서 실행 중인 프로세스가 바뀌는 것을 막기 위해 `read_lock(&tasklist_lock)`을 걸어놓는다. 이 전체 과정이 끝나면 `copy_to_user`를 통해 트리 탐색 결과를 `buf`에, 탐색한 프로세스 개수를 `nr`에 복사한다. 그 뒤, 모든 실행 중인 프로세스 수를 반환한다. `buf`에 포함되지 않은 프로세스도 ptree 실행 당시 실행 중이었다면 반환값에 포함한다.
-2. `void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)`
+2. `void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)`  
 `process_infos`는 프로세스 정보를 담아둘 struct 배열, `task`는 현재 확인 중인 프로세스의 task_struct, `max_cnt`는 `process_infos`에 담을 프로세스 개수의 상한, `curr_cnt`는 프로세스 iteration을 위한 커서, `true_cnt`는 모든 실행 중인 프로세스 수를 뜻한다.
 `process_tree_traversal()`을 실행하면 현재 새로운 프로세스를 확인 중이므로 `true_cnt`이 가리키는 값을 1만큼 증가시키고, 아직 주어진 프로세스 탐색 개수만큼 프로세스를 탐색하지 않았을 경우 `task`가 가리키는 프로세스를 탐색한다. 프로세스의 state, pid, parent_pid, first_child_pid, next_sibling_pid, uid, 프로세스명 등의 정보가 모두 task_struct의 멤버로 포함되어 있으므로, task의 각 멤버에 접근한 뒤 이 정보를 `process_infos`의 `curr_cnt`번째 원소에 저장하는 방식으로 정보를 순서대로 저장한다. 
 Linux에서 모든 프로세스는 `init_task`의 child process이다. 그러므로 `init_task`를 root로 하고 프로세스 트리를 순회하면 모든 프로세스를 탐색할 수 있다. 현재 확인중인 struct의 정보가 모두 입력되면, 남은 프로세스들을 preorder로 순회한다. task_struct는 다른 프로세스의 task_struct와 linked list로 연결되어 있기 때문에, linux에서 제공하는 list_for_each_entry 매크로 함수를 통해 이 linked list를 순회하는 방식으로 preorder traversal을 구현하였다.
@@ -45,4 +45,4 @@ Linux에서 모든 프로세스는 `init_task`의 child process이다. 그러므
 - kthreadd 프로세스는 모든 커널 스레드의 부모 프로세스이며, 커널 스레드를 생성하는 프로세스이다. `kthread_create()`, `kthread_run()`, `kthread_bind()`, `kthread_stop()`, `kthread_should_stop()`, `kthread_data()` 등의 api 호출시 커널 스레드를 fork한다.
 
 # Lessons learned
-수업 내용과 프로젝트 내용이 큰 관련이 없어 어려움을 많이 겪었다. 하지만 과제 수행을 위해 따로 커널에 대해 공부하면서 커널 프로그래밍에 대한 지식을 쌓을 수 있었고, 커널 프로그래밍에서 커널 관련 지식의 중요성을 느낄 수 있었다. 
+수업 내용과 프로젝트 내용이 큰 관련이 없어 어려움을 많이 겪었다. 하지만 과제 수행을 위해 따로 커널에 대해 공부하면서 커널 프로그래밍에 대한 지식을 쌓을 수 있었고, 커널 프로그래밍에서 커널 관련 지식의 중요성을 느낄 수 있었다. 앞으로 프로젝트를 위해서나 운영 체제 이해를 위해서 공부를 열심히 할 필요를 느꼈다.
