@@ -944,13 +944,22 @@ asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  
 
 /* OS project 1*/
-extern struct prinfo;
+// struct prinfo;
 
-// asmlinkage long sys_myprint(void);
+// asmlinkage int sys_ptree(struct prinfo *buf, int *nr);
+			  
+/* os project 2 */
+/*
+ * Set the SCHED_WRR weight of process, as identified by 'pid'.
+ * If 'pid' is 0, set the weight for the calling process.
+ */
+asmlinkage long sched_setweight(pid_t pid, int weight);
 
-asmlinkage int sys_ptree(struct prinfo *buf, int *nr);
-			  
-			  
+/*
+ * Obtain the SCHED_WRR weight of a process as identified by 'pid'.
+ * If 'pid' is 0, return the weight of the calling process.
+ */
+asmlinkage long sched_getweight(pid_t pid);		  
 			  
 
 #endif

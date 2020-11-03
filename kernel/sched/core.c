@@ -6756,3 +6756,26 @@ const u32 sched_prio_to_wmult[40] = {
  /*  10 */  39045157,  49367440,  61356676,  76695844,  95443717,
  /*  15 */ 119304647, 148102320, 186737708, 238609294, 286331153,
 };
+
+
+/* os project 2 */
+
+/*
+ * Set the SCHED_WRR weight of process, as identified by 'pid'.
+ * If 'pid' is 0, set the weight for the calling process.
+ * System call number 398.
+ */
+asmlinkage long sched_setweight(pid_t pid, int weight)
+{
+// root user's uid: 0, current process: find_task_by_vpid(get_pid())->cred->uid, current user: geteuid()
+}
+
+/*
+ * Obtain the SCHED_WRR weight of a process as identified by 'pid'.
+ * If 'pid' is 0, return the weight of the calling process.
+ * System call number 399.
+ */
+asmlinkage long sched_getweight(pid_t pid)
+{
+
+}
