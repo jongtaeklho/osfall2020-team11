@@ -1,15 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 int main(){
-
-    int n_origin = 5100;
+    clock_t start, end;
+    start = clock();
+    int n_origin;
     int n;
     int primes_size;
     int i;
     int *primes;
     primes_size = 0;
+    n_origin = 5100;
     n = n_origin;
     while(!(n % 2)){
         n /= 2;
@@ -46,7 +49,9 @@ int main(){
         }
     }
     printf("\nProduct from prime factorization: %d\n", product);
+    end = clock();
 
+    printf("Elapsed time: %f\n", (float)(end - start)/CLOCKS_PER_SEC);
 
 
 
