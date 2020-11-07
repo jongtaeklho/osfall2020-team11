@@ -25,7 +25,7 @@ the problems which may result by upgrading your kernel.
 # Data structures & Functions
 
 ## Process Hierarchy
-WRR 스케줄링 정책은 기존의 CFS와 RT사이에 존재한다. 따라서 `struct sched_class rt_sched_class`의 `.next`를 `&fair_sched_class`에서 `wrr_sched_class`로 바꾼다.
+WRR 스케줄링 정책은 기존의 CFS와 RT사이에 존재한다. 따라서 `struct sched_class rt_sched_class`의 `.next`를 `&fair_sched_class`에서 `wrr_sched_class`로 바꾼다.  
 
 ## `struct wrr_rq`와 `struct sched_wrr_entity`
 ### struct wrr_rq
@@ -48,7 +48,7 @@ wrr_rq는 각 cpu의 런큐에 있는 task들의 weight의 합을 sum에다 저�
 sched_wrr_entity들은 각각의 weight와 time_slice를 갖고있고, time_slice는 weight * 10ms로 할당받고  0이 되면 cpu를  반납하게된다. 반납할 때는 다시 time_slice를 weight * 10ms로 초기화하여 런큐에 넣는다.
 
 ## kernel/sched/wrr.c
-'''
+'''   
 const struct sched_class wrr_sched_class = {
     .next = &fair_sched_class,
     .enqueue_task = enqueue_task_wrr,
@@ -78,18 +78,22 @@ const struct sched_class wrr_sched_class = {
     .switched_to = switched_to_wrr,
 
     .update_curr = update_curr_wrr};
-'''
+'''   
 wrr.c는 위의 함수들로 구성되어 있다. 이 함수들 중 이번 WRR 스케줄링 정책에서 구현한 함수는 `enqueue_task_wrr`, `dequeue_task_wrr`, `pick_next_task_wrr`, `select_task_rq_wrr`, `task_tick_wrr`이다.
-##`enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`
+##`enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`  
 인자로 rq와 task_struct를 받는다. 주어진 task_struct를 rq->wrr에 linked list형태로 삽입한다. rq->wrr에 삽입할 때 `struct sched_wrr_entity`형태로 삽입하며 rq->wrr.sum에 삽입하는 task의 weight를 추가한다.
 
-##`dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`
+##`dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`  
 rq->wrr에서 주어진 task_struct를 빼준다.
 
-##`pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)`
+##`pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)`  
 rq->wrr에서 실행중인 task의 다음에 연결되어 있는 task를 return 해준다. 이때 만약 다음 task가 없다면 NULL return한다.
 
+##`select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)`  
+현재 실행중인 cpu중 런큐에 있는 task들의 weight의 총합이 가장 작은 cpu를 return한다.
 
+##`task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)`  
+core.c에서 매 time_slice마다 호출되며 만약 p의 주어진 time_slice가 0이하라면 cpu를 반납하고 rq->wrr의 제일 뒤로 옮겨진다.  
 
 2. `void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)`
 `process_infos`는 프로세스 정보를 담아둘 struct 배열, `task`는 현재 확인 중인 프로세스의 task_struct, `max_cnt`는 `process_infos`에 담을 프로세스 개수의 상한, `curr_cnt`는 프로세스 iteration을 위한 커서, `true_cnt`는 모든 실행 중인 프로세스 수를 뜻한다.
