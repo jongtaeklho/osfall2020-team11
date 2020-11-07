@@ -451,14 +451,13 @@ struct sched_entity {
 };
 
 struct sched_wrr_entity {
-        unsigned long long weight;
+        long weight;
+        long timeslick;
         struct sched_entity se;
         struct sched_wrr_entity *next;
         struct sched_wrr_entity *pre;
-        struct sched_wrr_entity *parent;
-
-
-
+        struct wrr_rq *parent;
+        struct task_struct *parent_t;
 };
 
 
@@ -619,7 +618,7 @@ struct task_struct {
 	struct task_group		*sched_task_group;
 #endif
 	struct sched_dl_entity		dl;
-        struct sched_wrr_entity         we;
+        struct sched_wrr_entity         wrr;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	/* List of struct preempt_notifier: */
 	struct hlist_head		preempt_notifiers;
