@@ -4054,21 +4054,22 @@ static bool check_same_owner(struct task_struct *p)
 }
 
 static int __sched_setscheduler(struct task_struct *p,
-				const struct sched_attr *attr,
-				bool user, bool pi)
+        const struct sched_attr *attr,
+        bool user, bool pi)
 {
-	int newprio = dl_policy(attr->sched_policy) ? MAX_DL_PRIO - 1 :
-		      MAX_RT_PRIO - 1 - attr->sched_priority;
-	int retval, oldprio, oldpolicy = -1, queued, running;
-	int new_effective_prio, policy = attr->sched_policy;
-	const struct sched_class *prev_class;
-	struct rq_flags rf;
-	int reset_on_fork;
-	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
-	struct rq *rq;
-
-	/* The pi code expects interrupts enabled */
-	BUG_ON(pi && in_interrupt());
+    int newprio = dl_policy(attr->sched_policy) ? MAX_DL_PRIO - 1 :
+        MAX_RT_PRIO - 1 - attr->sched_priority;
+    int retval, oldprio, oldpolicy = -1, queued, running;
+    int new_effective_prio, policy = attr->sched_policy;
+    const struct sched_class *prev_class;
+    struct rq_flags rf;
+    int reset_on_fork;
+    int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
+    struct rq *rq;
+    struct cpumask mask;
+    
+    /* The pi code expects interrupts enabled */
+    BUG_ON(pi && in_interrupt());
 recheck:
 	/* Double check policy once rq lock held: */
 	if (policy < 0) {
@@ -4085,216 +4086,241 @@ recheck:
 		~(SCHED_FLAG_RESET_ON_FORK | SCHED_FLAG_RECLAIM))
 		return -EINVAL;
 
-	/*
-	 * Valid priorities for SCHED_FIFO and SCHED_RR are
-	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
-	 * SCHED_BATCH and SCHED_IDLE is 0.
-	 */
-	if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
-	    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
-		return -EINVAL;
-	if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
-	    (rt_policy(policy) != (attr->sched_priority != 0)))
-		return -EINVAL;
 
-	/*
-	 * Allow unprivileged RT tasks to decrease priority:
-	 */
-        if(policy != SCHED_WRR) {
-	if (user && !capable(CAP_SYS_NICE)) {
-		if (fair_policy(policy)) {
-			if (attr->sched_nice < task_nice(p) &&
-			    !can_nice(p, attr->sched_nice))
-				return -EPERM;
-		}
+    if (policy != SCHED_WRR){
 
-		if (rt_policy(policy)) {
-			unsigned long rlim_rtprio =
-					task_rlimit(p, RLIMIT_RTPRIO);
 
-			/* Can't set/change the rt policy: */
-			if (policy != p->policy && !rlim_rtprio)
-				return -EPERM;
+        /*
+         * Valid priorities for SCHED_FIFO and SCHED_RR are
+         * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
+         * SCHED_BATCH and SCHED_IDLE is 0.
+         */
+        if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
+                (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
+            return -EINVAL;
+        if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
+                (rt_policy(policy) != (attr->sched_priority != 0)))
+            return -EINVAL;
 
-			/* Can't increase priority: */
-			if (attr->sched_priority > p->rt_priority &&
-			    attr->sched_priority > rlim_rtprio)
-				return -EPERM;
-		}
+        /*
+         * Allow unprivileged RT tasks to decrease priority:
+         */
+        if (user && !capable(CAP_SYS_NICE)) {
+            if (fair_policy(policy)) {
+                if (attr->sched_nice < task_nice(p) &&
+                        !can_nice(p, attr->sched_nice))
+                    return -EPERM;
+            }
 
-		 /*
-		  * Can't set/change SCHED_DEADLINE policy at all for now
-		  * (safest behavior); in the future we would like to allow
-		  * unprivileged DL tasks to increase their relative deadline
-		  * or reduce their runtime (both ways reducing utilization)
-		  */
-		if (dl_policy(policy))
-			return -EPERM;
+            if (rt_policy(policy)) {
+                unsigned long rlim_rtprio =
+                    task_rlimit(p, RLIMIT_RTPRIO);
 
-		/*
-		 * Treat SCHED_IDLE as nice 20. Only allow a switch to
-		 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
-		 */
-		if (idle_policy(p->policy) && !idle_policy(policy)) {
-			if (!can_nice(p, task_nice(p)))
-				return -EPERM;
-		}
+                /* Can't set/change the rt policy: */
+                if (policy != p->policy && !rlim_rtprio)
+                    return -EPERM;
 
-		/* Can't change other user's priorities: */
-		if (!check_same_owner(p))
-			return -EPERM;
+                /* Can't increase priority: */
+                if (attr->sched_priority > p->rt_priority &&
+                        attr->sched_priority > rlim_rtprio)
+                    return -EPERM;
+            }
 
-		/* Normal users shall not reset the sched_reset_on_fork flag: */
-		if (p->sched_reset_on_fork && !reset_on_fork)
-			return -EPERM;
-	}
+            /*
+             * Can't set/change SCHED_DEADLINE policy at all for now
+             * (safest behavior); in the future we would like to allow
+             * unprivileged DL tasks to increase their relative deadline
+             * or reduce their runtime (both ways reducing utilization)
+             */
+            if (dl_policy(policy))
+                return -EPERM;
+
+            /*
+             * Treat SCHED_IDLE as nice 20. Only allow a switch to
+             * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
+             */
+            if (idle_policy(p->policy) && !idle_policy(policy)) {
+                if (!can_nice(p, task_nice(p)))
+                    return -EPERM;
+            }
+
+            /* Can't change other user's priorities: */
+            if (!check_same_owner(p))
+                return -EPERM;
+
+            /* Normal users shall not reset the sched_reset_on_fork flag: */
+            if (p->sched_reset_on_fork && !reset_on_fork)
+                return -EPERM;
         }
-	if (user) {
-		retval = security_task_setscheduler(p);
-		if (retval)
-			return retval;
-	}
+    }
+    if (user) {
+        retval = security_task_setscheduler(p);
+        if (retval)
+            return retval;
+    }
 
-	/*
-	 * Make sure no PI-waiters arrive (or leave) while we are
-	 * changing the priority of the task:
-	 *
-	 * To be able to change p->policy safely, the appropriate
-	 * runqueue lock must be held.
-	 */
-	rq = task_rq_lock(p, &rf);
-	update_rq_clock(rq);
+    /*
+     * Make sure no PI-waiters arrive (or leave) while we are
+     * changing the priority of the task:
+     *
+     * To be able to change p->policy safely, the appropriate
+     * runqueue lock must be held.
+     */
+    rq = task_rq_lock(p, &rf);
+    update_rq_clock(rq);
 
-	/*
-	 * Changing the policy of the stop threads its a very bad idea:
-	 */
-	if (p == rq->stop) {
-		task_rq_unlock(rq, p, &rf);
-		return -EINVAL;
-	}
+    /*
+     * Changing the policy of the stop threads its a very bad idea:
+     */
+    if (p == rq->stop) {
+        task_rq_unlock(rq, p, &rf);
+        return -EINVAL;
+    }
 
-	/*
-	 * If not changing anything there's no need to proceed further,
-	 * but store a possible modification of reset_on_fork.
-	 */
-	if (unlikely(policy == p->policy)) {
-		if (fair_policy(policy) && attr->sched_nice != task_nice(p))
-			goto change;
-		if (wrr_policy(policy)) 
-                        goto change;
-                if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
-			goto change;
-		if (dl_policy(policy) && dl_param_changed(p, attr))
-			goto change;
+    /*
+     * If not changing anything there's no need to proceed further,
+     * but store a possible modification of reset_on_fork.
+     */
+    if (unlikely(policy == p->policy)) {
+        if (fair_policy(policy) && attr->sched_nice != task_nice(p))
+            goto change;
+        if (wrr_policy(policy))
+            goto change;
+        if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
+            goto change;
+        if (dl_policy(policy) && dl_param_changed(p, attr))
+            goto change;
 
-		p->sched_reset_on_fork = reset_on_fork;
-		task_rq_unlock(rq, p, &rf);
-		return 0;
-	}
+        p->sched_reset_on_fork = reset_on_fork;
+        task_rq_unlock(rq, p, &rf);
+        return 0;
+    }
 change:
 
-	if (user) {
+    if (user) {
 #ifdef CONFIG_RT_GROUP_SCHED
-		/*
-		 * Do not allow realtime tasks into groups that have no runtime
-		 * assigned.
-		 */
-		if (rt_bandwidth_enabled() && rt_policy(policy) &&
-				task_group(p)->rt_bandwidth.rt_runtime == 0 &&
-				!task_group_is_autogroup(task_group(p))) {
-			task_rq_unlock(rq, p, &rf);
-			return -EPERM;
-		}
+        /*
+         * Do not allow realtime tasks into groups that have no runtime
+         * assigned.
+         */
+        if (rt_bandwidth_enabled() && rt_policy(policy) &&
+                task_group(p)->rt_bandwidth.rt_runtime == 0 &&
+                !task_group_is_autogroup(task_group(p))) {
+            task_rq_unlock(rq, p, &rf);
+            return -EPERM;
+        }
 #endif
 #ifdef CONFIG_SMP
-		if (dl_bandwidth_enabled() && dl_policy(policy)) {
-			cpumask_t *span = rq->rd->span;
+        if (dl_bandwidth_enabled() && dl_policy(policy)) {
+            cpumask_t *span = rq->rd->span;
 
-			/*
-			 * Don't allow tasks with an affinity mask smaller than
-			 * the entire root_domain to become SCHED_DEADLINE. We
-			 * will also fail if there's no bandwidth available.
-			 */
-			if (!cpumask_subset(span, &p->cpus_allowed) ||
-			    rq->rd->dl_bw.bw == 0) {
-				task_rq_unlock(rq, p, &rf);
-				return -EPERM;
-			}
-		}
+            /*
+             * Don't allow tasks with an affinity mask smaller than
+             * the entire root_domain to become SCHED_DEADLINE. We
+             * will also fail if there's no bandwidth available.
+             */
+            if (!cpumask_subset(span, &p->cpus_allowed) ||
+                    rq->rd->dl_bw.bw == 0) {
+                task_rq_unlock(rq, p, &rf);
+                return -EPERM;
+            }
+        }
 #endif
-	}
+    }
 
-	/* Re-check policy now with rq lock held: */
-	if (unlikely(oldpolicy != -1 && oldpolicy != p->policy)) {
-		policy = oldpolicy = -1;
-		task_rq_unlock(rq, p, &rf);
-		goto recheck;
-	}
+    /* Re-check policy now with rq lock held: */
+    if (unlikely(oldpolicy != -1 && oldpolicy != p->policy)) {
+        policy = oldpolicy = -1;
+        task_rq_unlock(rq, p, &rf);
+        goto recheck;
+    }
 
-	/*
-	 * If setscheduling to SCHED_DEADLINE (or changing the parameters
-	 * of a SCHED_DEADLINE task) we need to check if enough bandwidth
-	 * is available.
-	 */
-	if ((dl_policy(policy) || dl_task(p)) && sched_dl_overflow(p, policy, attr)) {
-		task_rq_unlock(rq, p, &rf);
-		return -EBUSY;
-	}
+    /*
+     * If setscheduling to SCHED_DEADLINE (or changing the parameters
+     * of a SCHED_DEADLINE task) we need to check if enough bandwidth
+     * is available.
+     */
+    if ((dl_policy(policy) || dl_task(p)) && sched_dl_overflow(p, policy, attr)) {
+        task_rq_unlock(rq, p, &rf);
+        return -EBUSY;
+    }
 
-	p->sched_reset_on_fork = reset_on_fork;
-	oldprio = p->prio;
+    p->sched_reset_on_fork = reset_on_fork;
+    oldprio = p->prio;
 
-	if (pi) {
-		/*
-		 * Take priority boosted tasks into account. If the new
-		 * effective priority is unchanged, we just store the new
-		 * normal parameters and do not touch the scheduler class and
-		 * the runqueue. This will be done when the task deboost
-		 * itself.
-		 */
-		new_effective_prio = rt_effective_prio(p, newprio);
-		if (new_effective_prio == oldprio)
-			queue_flags &= ~DEQUEUE_MOVE;
-	}
+    if (pi) {
+        /*
+         * Take priority boosted tasks into account. If the new
+         * effective priority is unchanged, we just store the new
+         * normal parameters and do not touch the scheduler class and
+         * the runqueue. This will be done when the task deboost
+         * itself.
+         */
+        new_effective_prio = rt_effective_prio(p, newprio);
+        if (new_effective_prio == oldprio)
+            queue_flags &= ~DEQUEUE_MOVE;
+    }
 
-	queued = task_on_rq_queued(p);
-	running = task_current(rq, p);
-	if (queued)
-		dequeue_task(rq, p, queue_flags);
+    queued = task_on_rq_queued(p);
+    running = task_current(rq, p);
+		if (queued)
+        dequeue_task(rq, p, queue_flags);
+    if (running)
+        put_prev_task(rq, p);
+
+    prev_class = p->sched_class;
+    __setscheduler(rq, p, attr, pi);
+
+    if (queued) {
+        /*
+         * We enqueue to tail when the priority of a task is
+         * increased (user space view).
+         */
+        if (oldprio < p->prio)
+            queue_flags |= ENQUEUE_HEAD;
+
+        enqueue_task(rq, p, queue_flags);
+		}	
+	
 	if (running)
-		put_prev_task(rq, p);
-
-	prev_class = p->sched_class;
-	__setscheduler(rq, p, attr, pi);
-
-	if (queued) {
-		/*
-		 * We enqueue to tail when the priority of a task is
-		 * increased (user space view).
-		 */
-		if (oldprio < p->prio)
-			queue_flags |= ENQUEUE_HEAD;
-
-		enqueue_task(rq, p, queue_flags);
-	}
-	if (running)
-		set_curr_task(rq, p);
-
-	check_class_changed(rq, p, prev_class, oldprio);
-
-	/* Avoid rq from going away on us: */
-	preempt_disable();
-	task_rq_unlock(rq, p, &rf);
-
-	if (pi)
-		rt_mutex_adjust_pi(p);
-
-	/* Run balance callbacks after we've adjusted the PI chain: */
-	balance_callback(rq);
+	        set_curr_task(rq, p);
+	//}		
 	preempt_enable();
+    check_class_changed(rq, p, prev_class, oldprio);
 
-	return 0;
+    /* Avoid rq from going away on us: */
+    preempt_disable();
+    task_rq_unlock(rq, p, &rf);
+
+    if (pi)
+        rt_mutex_adjust_pi(p);
+
+    /* Run balance callbacks after we've adjusted the PI chain: */
+    balance_callback(rq);
+
+	if(rq->cpu==3 && p->policy==7){
+		rcu_read_lock();
+		if (task_running(rq, p) || p->state == TASK_WAKING) {	
+            struct migration_arg arg = { p, 0 };
+            /* Need help from migration thread: drop lock and wait. */
+            stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
+            tlb_migrate_finish(p->mm);
+        } 	
+		else if (task_on_rq_queued(p)) {
+            rq = move_queued_task(rq, &rf, p, 0);
+        }
+
+		cpumask_set_cpu(0, &mask);
+		cpumask_set_cpu(1, &mask);
+		cpumask_set_cpu(2, &mask);
+		sched_setaffinity(p->pid, &mask); 
+		rcu_read_unlock();
+	}
+
+    preempt_enable();
+    return 0;
 }
+
 
 static int _sched_setscheduler(struct task_struct *p, int policy,
 			       const struct sched_param *param, bool check)
