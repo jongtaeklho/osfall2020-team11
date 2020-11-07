@@ -17,7 +17,7 @@ void __init init_sched_wrr_class(void)
     curr->wrr.weight = 10;
 }
 
-static void init_rt_wrr(struct wrr_rq *wrr_rq)
+static void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
     wrr_rq->sum = 0;
     struct sched_wrr_entity dummy1, dummy2;
