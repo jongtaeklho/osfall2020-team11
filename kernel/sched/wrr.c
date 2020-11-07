@@ -79,6 +79,7 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
             return NULL;
     }
     rq->curr = ptr->parent_t;
+    ptr->parent_t->se.exec_start=rq->clock_task();
     rcu_read_unlock();
     return ptr->parent_t;
 }
@@ -242,6 +243,7 @@ static void yield_task_wrr(struct rq *rq)
 static int
 select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)
 {
+    s
     int selected_cpu = task_cpu(p);    
 	if (p->nr_cpus_allowed == 1)
         return selected_cpu;
