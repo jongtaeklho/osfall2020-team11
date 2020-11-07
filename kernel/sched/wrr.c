@@ -103,6 +103,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 
     wrr_se->nxt = rq->wrr.tail;
     rq->wrr.tail->pre = wrr_se;
+    rcu_read_unlock();
 }
 
 static int can_migrate(struct rq *rq, struct task_struct *p, int dst_cpu)
