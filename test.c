@@ -2,59 +2,119 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <sched.h>
+#include <unistd.h>
 
-int main(){
-    clock_t start, end;
-    start = clock();
-    int n_origin;
+#define SCHED_WRR 7
+#define NUM_PROCESS 10
+#define SCHED_SETWEIGHT 398
+#define SCHED_GETWEIGHT 399
+
+float prime_factorization(int n_origin)
+{
     int n;
     int primes_size;
     int i;
     int *primes;
     primes_size = 0;
-    n_origin = 5100;
     n = n_origin;
-    while(!(n % 2)){
+    while (!(n % 2))
+    {
         n /= 2;
         primes_size++;
     }
-    primes = (int *) calloc(primes_size, sizeof(int));
-    for(i = 0; i < primes_size; i++){
+    primes = (int *)calloc(primes_size, sizeof(int));
+    for (i = 0; i < primes_size; i++)
+    {
         primes[i] = 2;
     }
     i = 3;
-    while(i <= floor(sqrt(n))){
-        if(!(n % i)){
+    while (i <= floor(sqrt(n)))
+    {
+        if (!(n % i))
+        {
             n /= i;
             primes_size++;
-            primes = (int *) realloc(primes, primes_size * sizeof(int));
+            primes = (int *)realloc(primes, primes_size * sizeof(int));
             primes[primes_size - 1] = i;
-        } else{
+        }
+        else
+        {
             i += 2;
         }
-
     }
-    if(n != 1){
+    if (n != 1)
+    {
         primes_size++;
-        primes = (int *) realloc(primes, primes_size * sizeof(int));
+        primes = (int *)realloc(primes, primes_size * sizeof(int));
         primes[primes_size - 1] = n;
     }
     printf("Prime factorization of %d: ", n_origin);
     int product = 1;
-    for(i = 0; i < primes_size; i++){
+    for (i = 0; i < primes_size; i++)
+    {
         printf("%d ", primes[i]);
         product *= primes[i];
-        if(i + 1 != primes_size){
+        if (i + 1 != primes_size)
+        {
             printf("x ");
         }
     }
     printf("\nProduct from prime factorization: %d\n", product);
-    end = clock();
+    return;
+}
 
-    printf("Elapsed time: %f\n", (float)(end - start)/CLOCKS_PER_SEC);
+int main()
+{
+    pid_t pids[NUM_PROCESS];
+    int weights[NUM_PROCESS];
+    int num;
 
+    clock_t start, end;
+    int status;
+    int i;
+    struct sched_param param;
+    param.sched_priority = 1;
+    for (i = 0; i < NUM_PROCESS; i++)
+    {
+        weights[i] = 2 * i + 1;
+        num = 2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
+        pids[i] = fork();
+        if (pids[i] < 0)
+        {
+            printf("Fork error\n");
+            return -1;
+        }
+        else if (pids[i] == 0)
+        {
+            pid_t pid = getpid();
+            if (sched_setscheduler(pid, SCHED_WRR, &param))
+            {
+                printf("Failed to set scheduler, pid: %d\n", pid);
+                return -1;
+            }
+            if (syscall(SCHED_SETWEIGHT, pid, weights[i]))
+            {
+                printf("Failed to set weight for scheduler, pid: %d\n", pid);
+                return -1;
+            }
+            else
+            {
+                start = clock();
+                prime_factorization(num);
+                end = clock();
 
-
-
+                printf("Elapsed time: %f, pid: %d, weight: %d\n", (float)(end - start) / CLOCKS_PER_SEC, getpid(), weights[i]);
+            }
+        }
+    }
+    for (i = 0; i < NUM_PROCESS; i++){
+        pid_t wait_pid = waitpid(pids[i], &status, 0);
+        if(WIFSIGNALED(status) > 0){
+            printf("Error while process (%d).\n", wait_pid);
+        } else{
+            printf("Process %d terminated.\n", wait_pid);
+        }
+    }
     return 0;
 }

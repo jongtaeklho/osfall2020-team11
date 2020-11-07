@@ -6767,7 +6767,54 @@ const u32 sched_prio_to_wmult[40] = {
  */
 asmlinkage long sched_setweight(pid_t pid, int weight)
 {
-// root user's uid: 0, current process: find_task_by_vpid(get_pid())->cred->uid, current user: geteuid()
+// root user's uid: 0, current process: task->cred->uid, current user: geteuid()
+	struct task_struct *task;
+	if(weight < 1 || weight > 20){
+		printk(KERN_ALERT "Invalid weight\n");
+		return -1;
+	}
+	if(!pid){
+		task = current;
+	} else{
+		task = find_task_by_vpid(pid);
+	}
+	if(task == NULL || task->wrr == NULL || task->wrr->parent == NULL){
+		printk(KERN_ALERT "Task struct is not initialized\n");
+		return -1;
+	}
+	if(task->policy != SCHED_WRR){
+		printk(KERN_ALERT "Tried to change weight of process not on WRR scheduler.\n");
+		return -1;
+	}
+	
+	struct sched_wrr_entity *we = task->wrr;
+	struct wrr_rq *wrr_q = we->parent;
+	int task_weight = we->weight;
+	if(task_weight > weight){
+		if(geteuid() == 0){ 
+			rcu_read_lock();
+			wrr_q->sum += weight - task_weight; 
+			we->weight = weight;
+			we->time_slice = weight * 10;
+			rcu_read_unlock();
+		} else{
+			printk(KERN_ALERT "The user is not authorized.\n");
+			return -1;
+		}
+	}
+	else if(task_weight < weight){
+		if(geteuid() == 0 || geteuid() == task->cred->uid){
+			rcu_read_lock();
+			wrr_q->sum += weight - task_weight;
+			we->weight = weight;
+			we->time_slice = weight * 10;
+			rcu_read_unlock();
+		} else{
+			printk(KERN_ALERT "The user is not authorized.\n");
+			return -1;
+		}
+	}
+	return 0;
 }
 
 /*
@@ -6777,5 +6824,15 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
  */
 asmlinkage long sched_getweight(pid_t pid)
 {
-
+	struct task_struct *task;
+	if(!pid){
+		task = current;
+	} else{
+		task = find_task_by_vpid(pid);
+	}
+	if(task == NULL || task->wrr == NULL){
+		printk(KERN_ALERT "Task struct is not initialized\n");
+		return -1;
+	}
+	return task->wrr.weight;
 }
