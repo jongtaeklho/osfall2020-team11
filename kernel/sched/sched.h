@@ -270,7 +270,7 @@ extern bool dl_cpu_busy(unsigned int cpu);
 
 struct cfs_rq;
 struct rt_rq;
-
+struct wrr_rq;
 extern struct list_head task_groups;
 
 struct cfs_bandwidth {
@@ -541,6 +541,17 @@ struct rt_rq {
 #endif
 };
 
+
+struct wrr_rq {
+        unsigned long long sum;
+        wrr_entity* head;
+        wrr_entity* tail;
+        struct plist_head pushable_tasks;
+
+};
+
+
+
 /* Deadline class' related fields in a runqueue */
 struct dl_rq {
 	/* runqueue is an rbtree, ordered by deadline */
@@ -708,7 +719,7 @@ struct rq {
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 	struct dl_rq dl;
-
+        struct wrr_rq wrr;
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
 	struct list_head leaf_cfs_rq_list;
