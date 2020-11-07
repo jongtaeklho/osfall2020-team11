@@ -140,10 +140,14 @@ static inline int dl_policy(int policy)
 {
 	return policy == SCHED_DEADLINE;
 }
+static inline int wrr_policy(int policy)
+{
+	return policy == SCHED_WRR;
+}
 static inline bool valid_policy(int policy)
 {
 	return idle_policy(policy) || fair_policy(policy) ||
-		rt_policy(policy) || dl_policy(policy);
+		rt_policy(policy) || dl_policy(policy) || wrr_policy(policy);
 }
 
 static inline int task_has_rt_policy(struct task_struct *p)
@@ -156,6 +160,10 @@ static inline int task_has_dl_policy(struct task_struct *p)
 	return dl_policy(p->policy);
 }
 
+static inline int task_has_wrr_policy(struct task_struct *p)
+{
+	return wrr_policy(p->policy);
+}
 /*
  * Tells if entity @a should preempt entity @b.
  */
@@ -546,7 +554,7 @@ struct wrr_rq {
         unsigned long long sum;
         wrr_entity* head;
         wrr_entity* tail;
-        struct plist_head pushable_tasks;
+		struct wrr_rq wrr;
 
 };
 

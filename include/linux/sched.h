@@ -452,12 +452,14 @@ struct sched_entity {
 
 struct sched_wrr_entity {
         long weight;
-        long timeslick;
         struct sched_entity se;
         struct sched_wrr_entity *next;
         struct sched_wrr_entity *pre;
+        long time_slice;
         struct wrr_rq *parent;
-        struct task_struct *parent_t;
+		struct task_struct * parent_t;
+
+
 };
 
 
