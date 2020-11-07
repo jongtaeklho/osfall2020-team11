@@ -6,11 +6,10 @@
 #include <unistd.h>
 
 #define SCHED_WRR 7
-#define NUM_PROCESS 10
 #define SCHED_SETWEIGHT 398
 #define SCHED_GETWEIGHT 399
 
-void prime_factorization(long long  n_origin)
+void prime_factorization(long long n_origin)
 {
     long long n;
     int primes_size;
@@ -64,21 +63,30 @@ void prime_factorization(long long  n_origin)
     return;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    pid_t pids[NUM_PROCESS];
-    int weights[NUM_PROCESS];
     long long num;
+    int num2factor;
+    struct timespec start, end;
+    float elapsed_time;
+    if (argc != 3) {
+        printf("Need 2 inputs (num_process, num2factor)\n");
+        return 0;
+    }
+    int num_process = atoi(argv[1]);
+    num2factor = atoi(argv[2]);
 
-    clock_t start, end;
+    pid_t pids[num_process];
+    int weights[num_process];
     int status;
     int i;
     struct sched_param param;
-    param.sched_priority = 1;
-    for (i = 0; i < NUM_PROCESS; i++)
+    param.sched_priority = 99;
+    int sched_weight;
+    for (i = 0; i < num_process; i++)
     {
         weights[i] = 2 * i + 1;
-        num = (long long)2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
+        // num = (long long)2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
         pids[i] = fork();
         if (pids[i] < 0)
         {
@@ -100,20 +108,23 @@ int main()
             }
             else
             {
-                start = clock();
-                prime_factorization(num);
-                end = clock();
-
-                printf("Elapsed time: %f, pid: %d, weight: %d\n", (float)(end - start) / CLOCKS_PER_SEC, getpid(), weights[i]);
+                sched_weight = syscall(SCHED_GETWEIGHT, 0);
+                printf("weight of scheduled process: %d\n", sched_weight);
+                clock_gettime(CLOCK_MONOTONIC, &start);
+                prime_factorization(num2factor);
+                clock_gettime(CLOCK_MONOTONIC, &end);
+                elapsed_time = end.tv_sec - start.tv_sec + (float)(end.tv_nsec - start.tv_nsec) / 1000000000;
+                printf("Elapsed time: %f, pid: %d, weight: %d\n", elapsed_time, getpid(), weights[i]);
+                exit(0);
             }
         }
     }
-    for (i = 0; i < NUM_PROCESS; i++){
+    for (i = 0; i < num_process; i++){
         pid_t wait_pid = waitpid(pids[i], &status, 0);
-        if(WIFSIGNALED(status) > 0){
+        if(!WIFEXITED(status)){
             printf("Error while process (%d).\n", wait_pid);
         } else{
-            printf("Process %d terminated.\n", wait_pid);
+            printf("Process %d terminated. Status: %d\n", wait_pid, WEXITSTATUS(status));
         }
     }
     return 0;

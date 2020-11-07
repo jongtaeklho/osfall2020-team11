@@ -88,14 +88,14 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
                 return NULL;
             }
     }
-    rq->curr = ptr->parent_t;
+    // rq->curr = ptr->parent_t;
     ptr->parent_t->se.exec_start=rq->clock_task;
     return ptr->parent_t;
 }
 
 static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
-    printk(KERN_INFO "task_tick_wrr\n");
+    // printk(KERN_INFO "task_tick_wrr\n");
     
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
@@ -257,7 +257,7 @@ select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags
     if(sd_flag != SD_BALANCE_FORK)
         return selected_cpu;
     int cpu;
-    int ans=select_cpu;
+    int ans=selected_cpu;
     rcu_read_lock();
     struct rq* rq = cpu_rq(selected_cpu);
     for_each_online_cpu(cpu)
