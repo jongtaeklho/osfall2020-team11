@@ -19,21 +19,30 @@ requirements for building and running the kernel, and information about
 the problems which may result by upgrading your kernel.
 ```
 
-# How to Build this Kernel
-주어진 tizen 커널에 다음과 같은 과정을 거쳐 새로운 system call인 sys_ptree를 등록할 수 있다. 
-1. syscall 번호 등록
-    - 모든 syscall은 syscall table에서 관리한다. syscall이 작동하기 위해선 이 table의 빈 번호에 새로 등록할 syscall을 할당해야한다.
-    - 이 커널은 aarch64이므로 `arch/arm64/include/asm/unistd32.h`, `include/uapi/asm-generic/unistd.h`에서 398번을 할당한다. 
-    - `include/uapi/asm-generic/unistd.h`, `arch/arm64/include/asm/unistd.h` 등의 최대 syscall 범위를 398보다 큰 숫자(예:399)로 바꿔 398번 syscall을 사용할 수 있게 한다.
-2. `include/linux/prinfo.h` 헤더 파일에 prinfo 구조체를 선언해준다.
-3. `include/linux/syscalls.h` 헤더 파일에 asmlinkage int sys_ptree()를 선언한다.
-4. `~/kernel/ptree.c`에 sys_ptree 함수를 구현한다.
-5. 커널 Makefile(`kernel/Makefile`)에 `obj-y +=ptree.o` 를 추가해 컴파일될 수 있도록 한다.
-6. `./build-rpi3-arm64.sh`을 실행하여 변경된 커널을 컴파일한다.
+# Overview
+리눅스 커널에 새로운 스케줄링 정책인 Weighted Round Robin(WRR)을 추가하는 과제이다. WRR은 기존의 Round Robin과 비슷하다. 다른 점은 프로세스가 각자의 weight를 가지고 있고, time slice가 weight * 10ms로 결정된다는 것이다. 모든 프로세스의  weight는 10으로 시작한다. 또 WRR에서는 프로세스의 효율성을 위해 정해진 시간마다 load balancing을 해준다. load balancing이란 weight의 총합이 가장 큰 런큐에서 weight의 총합이 가장 작은 런큐로 task를 migrate해주는 것이다.  
 # Design & Implementation
-1. `int sys_ptree(struct prinfo *buf, int *nr)`
-`sys_ptree()`을 실행하면 우선 error 상황을 확인한다. `buf` 또는 `nr` 포인터가 `NULL`을 가리키거나, entry 개수가 1 미만인 등 함수 argument에 문제가 있다면 `-EINVAL`을 반환한다. access_ok를 통해 `nr`, `buf`를 확인하여 access 불가능할 경우 `-EFAULT`를 반환한다.
-커널 프로그램에서 user memory space에 계속 접근하는 것은 커널 패닉을 일으킬 수 있으므로, 입력된 `nr` 값을 `nr_max`에 재할당한다. 이제 프로세스 트리를 만들 준비가 끝났으면 `process_tree_traversal()` 함수를 실행하여 preorder로 각 프로세스 정보를 확인하고 `process_info`에 저장한다. 이 과정에서 실행 중인 프로세스가 바뀌는 것을 막기 위해 `read_lock(&tasklist_lock)`을 걸어놓는다. 이 전체 과정이 끝나면 `copy_to_user`를 통해 트리 탐색 결과를 `buf`에, 탐색한 프로세스 개수를 `nr`에 복사한다. 그 뒤, 모든 실행 중인 프로세스 수를 반환한다. `buf`에 포함되지 않은 프로세스도 ptree 실행 당시 실행 중이었다면 반환값에 포함한다.
+1. `struct wrr_rq`와 `struct sched_wrr_entity`를 정의한다.
+### struct wrr_rq
+```
+unsigned long long sum;
+struct wrr_entity *head;
+struct wrr_entity *tail;
+```
+### struct sched_wrr_entity
+```
+struct sched_entity se;
+struct sched_wrr_entity *nxt;
+strcut sched_wrr_entity *pre;
+long time_slice;
+long weight;
+struct wrr_rq *parent;
+struct task_struct *parent_t;
+```
+wrr_rq는 각 cpu의 런큐에 있는 task들의 weight의 합을 sum에다 저장하고 있다. 이 sum은 load balancing할 때 런큐의 weight의 총합을 비교할 때 사용한다. wrr_rq에 linked list의 형태로 sched_wrr_entity들이 붙어있고, wrr_rq에서는 linked list의 head와 tail을 갖고있다.
+sched_wrr_entity들은 각각의 weight와 time_slice를 갖고있고, 본인의 task_struct를 가리키는 parent_t를 갖고있다. parent_t는 pick_next_task나 load_balance()를 할 때 
+
+
 2. `void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)`
 `process_infos`는 프로세스 정보를 담아둘 struct 배열, `task`는 현재 확인 중인 프로세스의 task_struct, `max_cnt`는 `process_infos`에 담을 프로세스 개수의 상한, `curr_cnt`는 프로세스 iteration을 위한 커서, `true_cnt`는 모든 실행 중인 프로세스 수를 뜻한다.
 `process_tree_traversal()`을 실행하면 현재 새로운 프로세스를 확인 중이므로 `true_cnt`이 가리키는 값을 1만큼 증가시키고, 아직 주어진 프로세스 탐색 개수만큼 프로세스를 탐색하지 않았을 경우 `task`가 가리키는 프로세스를 탐색한다. 프로세스의 state, pid, parent_pid, first_child_pid, next_sibling_pid, uid, 프로세스명 등의 정보가 모두 task_struct의 멤버로 포함되어 있으므로, task의 각 멤버에 접근한 뒤 이 정보를 `process_infos`의 `curr_cnt`번째 원소에 저장하는 방식으로 정보를 순서대로 저장한다. 
