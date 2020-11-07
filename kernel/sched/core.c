@@ -82,7 +82,7 @@ __read_mostly int scheduler_running;
  * default: 0.95s
  */
 int sysctl_sched_rt_runtime = 950000;
-
+static unsigned long prev_jiffies;
 /* CPUs with isolated domains */
 cpumask_var_t cpu_isolated_map;
 
@@ -3039,7 +3039,26 @@ void scheduler_tick(void)
 
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
-	trigger_load_balance(rq);
+        trigger_load_balance(rq);
+
+        
+        if(curr->policy===SCHED_WRR) {
+            rcu_read_lock();
+            if(time_after_eq(jiffies,prev_jiffies +(2*HZ))){
+            
+                printk(KERN_ALERT "load balance start\n");
+                print_curr_cpu_weights();
+                preempt_disable();
+                wrr_load_balance();
+                preempt_enable();
+                printk(KERN_ALERT "load balance end\n");
+                print_curr_cpu_weights();
+                prev_jiffies=jiffies;
+
+
+            }    
+            rcu_read_unlock();
+        }
 #endif
 	rq_last_tick_reset(rq);
 }
@@ -5747,8 +5766,10 @@ void __init sched_init_smp(void)
 		BUG();
 	sched_init_granularity();
 	free_cpumask_var(non_isolated_cpus);
-
+        
+        prev_jiffies= jiffies;
 	init_sched_rt_class();
+        init_sched_wrr_class();
 	init_sched_dl_class();
 
 	sched_smp_initialized = true;
