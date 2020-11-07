@@ -554,6 +554,7 @@ struct wrr_rq {
         unsigned long long sum;
         struct sched_wrr_entity* head;
         struct sched_wrr_entity* tail;
+		struct sched_wrr_entity dummy1,dummy2;
 };
 
 

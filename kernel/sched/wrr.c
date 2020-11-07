@@ -20,9 +20,9 @@ void __init init_sched_wrr_class(void)
 void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
     wrr_rq->sum = 0;
-    struct sched_wrr_entity dummy1, dummy2;
-    wrr_rq->head = &dummy1;
-    wrr_rq->tail = &dummy2;
+   
+    wrr_rq->head = &wrr_rq->dummy1;
+    wrr_rq->tail = &wrr_rq->dummy2;
     wrr_rq->head->nxt = wrr_rq->tail;
     wrr_rq->tail->pre = wrr_rq->head;
 }
@@ -79,7 +79,7 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
             return NULL;
     }
     rq->curr = ptr->parent_t;
-    ptr->parent_t->se.exec_start = rq->clock_task;
+    ptr->parent_t->se.exec_start=rq->clock_task;
     rcu_read_unlock();
     return ptr->parent_t;
 }
@@ -243,24 +243,25 @@ static void yield_task_wrr(struct rq *rq)
 static int
 select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)
 {
-    int selected_cpu = task_cpu(p);
-    if (p->nr_cpus_allowed == 1)
+    s
+    int selected_cpu = task_cpu(p);    
+	if (p->nr_cpus_allowed == 1)
         return selected_cpu;
-    if (sd_flag != SD_BALANCE_FORK)
+    if(sd_flag != SD_BALANCE_FORK)
         return selected_cpu;
     int cpu;
-    int ans = select_cpu;
+    int ans=select_cpu;
     rcu_read_lock();
-    struct rq *rq = cpu_rq(selected_cpu);
+    struct rq* rq = cpu_rq(selected_cpu);
     for_each_online_cpu(cpu)
     {
         if (cpu == NO_CPU)
             continue;
         if (rq->wrr.sum > cpu_rq(cpu)->wrr.sum)
-        {
-            rq = cpu_rq(cpu);
-            ans = cpu;
-        }
+            {
+                rq = cpu_rq(cpu);
+                ans=cpu;
+            }
     }
     rcu_read_unlock();
     return ans;
@@ -287,7 +288,7 @@ static void set_curr_task_wrr(struct rq *rq)
 }
 static void check_preempt_curr_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
-    printk(KERN_INFO "check_preempt_curr\n");
+	printk(KERN_INFO "check_preempt_curr\n");
 }
 
 static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
