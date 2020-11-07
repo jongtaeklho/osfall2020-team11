@@ -35,17 +35,7 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
     wrr_se->weight = 10;
     wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 
-    int cpu;
-    rq = cpu_rq(0);
     rcu_read_lock();
-    for_each_online_cpu(cpu)
-    {
-        if (cpu == NO_CPU)
-            continue;
-        if (rq->wrr.sum > cpu_rq(cpu)->wrr.sum)
-            rq = cpu_rq(cpu);
-    }
-
     head = rq->wrr.head;
     tail = rq->wrr.tail;
 
@@ -249,10 +239,29 @@ static void yield_task_wrr(struct rq *rq)
 }
 
 static int
-select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
+select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)
 {
-    printk(KERN_INFO "select_task_rq\n");
-    return 0;
+    int selected_cpu = task_cpu(p);    
+	if (p->nr_cpus_allowed == 1)
+        return selected_cpu;
+    if(sd_flag != SD_BALANCE_FORK)
+        return selected_cpu;
+    int cpu;
+    int ans=select_cpu;
+    rcu_read_lock();
+    rq = cpu_rq(selected_cpu);
+    for_each_online_cpu(cpu)
+    {
+        if (cpu == NO_CPU)
+            continue;
+        if (rq->wrr.sum > cpu_rq(cpu)->wrr.sum)
+            {
+                rq = cpu_rq(cpu);
+                ans=cpu;
+            }
+    }
+    rcu_read_unlock();
+    return ans;
 }
 static void rq_online_wrr(struct rq *rq)
 {
