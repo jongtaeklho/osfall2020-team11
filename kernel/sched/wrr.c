@@ -1,28 +1,21 @@
 #include "sched.h"
 
-#define WRR_TIMESLICE= HZ/100
-#define NO_CPU =1
-
-
-
+#define WRR_TIMESLICE = HZ / 100
+#define NO_CPU = 1
 
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
 
-
 void __init init_sched_wrr_class(void)
 {
-	unsigned int i;
+    unsigned int i;
 
-	for_each_possible_cpu(i) {
-		zalloc_cpumask_var_node(&per_cpu(local_cpu_mask, i),
-					GFP_KERNEL, cpu_to_node(i));
-	}
-        curr->wrr.weight=10;
+    for_each_possible_cpu(i)
+    {
+        zalloc_cpumask_var_node(&per_cpu(local_cpu_mask, i),
+                                GFP_KERNEL, cpu_to_node(i));
+    }
+    curr->wrr.weight = 10;
 }
-
-
-
-
 
 static void init_rt_wrr(struct wrr_rq *wrr_rq)
 {
@@ -122,15 +115,12 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
     rq->wrr->tail->pre = wrr_se;
 }
 
+static int can_migrate(struct rq *rq, struct task_struct *p, int dst_cpu)
+{
+    if (task_curr(rq, p) && p->nr_cpus_allowed > 1 && cpumask_test_cpu(dst_cpu, &(p)->cpus_allowed))
+        return 1;
 
-static int can_migrate(struct rq *rq, struct task_struct *p, int dst_cpu) {
-    if(task_curr(rq,p)&&p->nr_cpus_allowed>1&&cpumask_test_cpu(dst_cpu,&(p)->cpus_allowed)) 
-    return 1;
-
-return 0;
-
-
-
+    return 0;
 }
 
 static int migrate_task_wrr(int src_cpu,int dst_cpu{
@@ -138,92 +128,101 @@ static int migrate_task_wrr(int src_cpu,int dst_cpu{
     struct rq *rq_dst;
     struct rq *rq_src;
     struct task_struct *curr;
-    struct task_struct *migrate_task=NULL;
-    int src_weight,dst_weight;
+    struct task_struct *migrate_task = NULL;
+    int src_weight, dst_weight;
     int max_;
     rcu_read_lock();
-    rq_src=cpu_rq(src_cpu);
-    rq_dst=cup_rq(dst_cpu);
-    max_=0;
-    src_weight=rq_src->wrr.sum;
-    dst_weight=rq_dst->wrr.sum;
-    struct sched_wrr_entity *tmp=rq_src->wrr->head;
-    while(!tmp!=rq_src->wrr->tail){
-    curr=tmp->parent_t;
-    if(can_migarte(rq_src,curr,dst_cpu)&&tmp.weight>max_&&dst_weight+tmp.weight<=src_weight-tmp.weight)
+    rq_src = cpu_rq(src_cpu);
+    rq_dst = cup_rq(dst_cpu);
+    max_ = 0;
+    src_weight = rq_src->wrr.sum;
+    dst_weight = rq_dst->wrr.sum;
+    struct sched_wrr_entity *tmp = rq_src->wrr->head;
+    while (!tmp != rq_src->wrr->tail)
     {
-        max_=tmp.weight;
-        migrate_task=curr;
-    }
+        curr = tmp->parent_t;
+        if (can_migrate(rq_src, curr, dst_cpu) && tmp.weight > max_ && dst_weight + tmp.weight <= src_weight - tmp.weight)
+        {
+            max_ = tmp.weight;
+            migrate_task = curr;
+        }
 
-    tmp=tmp->nxt;
+        tmp = tmp->nxt;
     }
     rcu_read_unlock();
 
-    if(migrate_task!=NULL){
-    raw_spin_lock(&migrate_task->pi_lock);
-    double_rq_lock(rq_src,rq_dst);
-    if(task_cpu(migrate_task)!=src_cpu){
-        double_rq_unlock(rq_src,rq_dst);
-        raw_spin_unlock(&migrate_task->pi_lock);
-    return 1;
-    }
-    if(!cpumask_test_cpu(dst_cpu,&(migrate_task->cpus_allowed)))    
+    if (migrate_task != NULL)
     {
-        printk(KERN_ALERT "failed");
-        double_rq_unlock(rq_src,rq_dst);
+        raw_spin_lock(&migrate_task->pi_lock);
+        double_rq_lock(rq_src, rq_dst);
+        if (task_cpu(migrate_task) != src_cpu)
+        {
+            double_rq_unlock(rq_src, rq_dst);
+            raw_spin_unlock(&migrate_task->pi_lock);
+            return 1;
+        }
+        if (!cpumask_test_cpu(dst_cpu, &(migrate_task->cpus_allowed)))
+        {
+            printk(KERN_ALERT "failed");
+            double_rq_unlock(rq_src, rq_dst);
+            raw_spin_unlock(&migrate_task->pi_lock);
+            return 0;
+        }
+        if (migarte_task->on_rq)
+        {
+            deactivate_task(rq_src, migrate_task, 1);
+            set_task_cpu(migrate_task, rq_dst->cpu);
+            activate_task(rq_dst, migrate_task, 0);
+            check_preempt_curr(rq_dst, migrate_task, 0);
+        }
+        double_rq_unlock(rq_src, rq_dst);
         raw_spin_unlock(&migrate_task->pi_lock);
-        return 0;
+        return 1;
     }
-    if(migarte_task->on_rq) {
-        deactivate_task(rq_src,migrate_task,1);
-        set_task_cpu(migrate_task,rq_dst->cpu);
-        activate_task(rq_dst,migrate_task,0);
-        check_preempt_curr(rq_dst,migrate_task,0);
-    }
-    double_rq_unlock(rq_src,rq_dst);
-    raw_spin_unlock(&migarte_task->pi_lock);
-    return 1;
-
-    }
-    printk(KERN_LERT "no migrateble task");
+    printk(KERN_ALERT "no migrateble task");
     return 0;
 
 }
 
 void wrr_load_balance(void){
-    int src_cpu,dst_cpu;
+    int src_cpu, dst_cpu;
     struct rq *rq;
-    int max_=0;
-    int min_=100000000;
-    int init_cpu=smp_processor_id();
-    rq=cpu_rq(init_cup);
-    src_cpu=rq->cpu;
-    dst_cpu=rq->cpu;
+    int max_ = 0;
+    int min_ = 100000000;
+    int init_cpu = smp_processor_id();
+    rq = cpu_rq(init_cup);
+    src_cpu = rq->cpu;
+    dst_cpu = rq->cpu;
 
-    if(unlikely(!cpu_active_mask)&&num_active_cpus()<1) {
+    if (unlikely(!cpu_active_mask) && num_active_cpus() < 1)
+    {
         printk(KERN_ALERT "NO ACTIVE CPUS");
         return;
     }
     rcu_read_lock();
-    for_each_online_cpu(cpu){
-        rq=cpu_rq(cpu);
-        if(cpu==NO_CPU) continue;
-        if(min_>rq->wrr.sum) {
-            min_=rq->wrr.sum;
-            dst_cpu=rq->cpu;
+    for_each_online_cpu(cpu)
+    {
+        rq = cpu_rq(cpu);
+        if (cpu == NO_CPU)
+            continue;
+        if (min_ > rq->wrr.sum)
+        {
+            min_ = rq->wrr.sum;
+            dst_cpu = rq->cpu;
         }
-        if(max_<rq->wrr.sum) {
-            max_=rq->wrr.sum;
-            src_cpu=rq->cpu;
+        if (max_ < rq->wrr.sum)
+        {
+            max_ = rq->wrr.sum;
+            src_cpu = rq->cpu;
         }
     }
-    if(min_==100000000||max_==0) {
+    if (min_ == 100000000 || max_ == 0)
+    {
         printk(KERN_ALERT "NO");
         return;
     }
     rcu_read_unlock();
-    if(!migarte_task_wrr(src_cpu,dst_cpu) {
+    if(!migrate_task_wrr(src_cpu,dst_cpu) {
         printk(KERN_ALERT "NONO...\n");
     }
     return;
