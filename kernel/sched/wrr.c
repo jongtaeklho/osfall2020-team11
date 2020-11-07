@@ -160,7 +160,7 @@ static int migrate_task_wrr(int src_cpu,int dst_cpu{
     max_=0;
     src_weight=rq_src->wrr.sum;
     dst_weight=rq_dst->wrr.sum;
-    struct sched_wrr_entity *tmp=rq_src->wrr->head;
+    struct sched_wrr_entity *tmp=rq_src->wrr->head->nxt;
     while(!tmp!=rq_src->wrr->tail){
     curr=tmp->parent_t;
     if(can_migarte(rq_src,curr,dst_cpu)&&tmp.weight>max_&&dst_weight+tmp.weight<=src_weight-tmp.weight)

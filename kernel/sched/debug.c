@@ -586,7 +586,42 @@ void print_cfs_rq(struct seq_file *m, int cpu, struct cfs_rq *cfs_rq)
 	print_cfs_group_stats(m, cpu, cfs_rq->tg);
 #endif
 }
+void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq)
+{
+   
+    printk("seq_file *m: %p, cpu: %d, *wrr_rq: %p\n");
+    
+    SEQ_printf(m, "\nwrr_rq[%d]:\n", cpu);
+   
 
+#define P(x) \
+	SEQ_printf(m, "  .%-30s: %Ld\n", #x, (long long)(wrr_rq->x))
+#define PU(x) \
+	SEQ_printf(m, "  .%-30s: %lu\n", #x, (unsigned long)(wrr_rq->x))
+#define PN(x) \
+	SEQ_printf(m, "  .%-30s: %Ld.%06ld\n", #x, SPLIT_NS(wrr_rq->x))
+
+
+    PU(sum);
+   
+    struct sched_wrr_entity *we;
+    struct task_struct * task;
+    we=wrr_rq->head->nxt;
+    while(we!=wrr_rq->tail){
+        task=we->parent_t;
+        SEQ_printf(m,  "  .%-30s: weight= %d\n", task->comm, we->weight);
+        we=we->nxt;
+    }    
+
+
+
+    printk("debug \n");
+   
+
+#undef PN
+#undef PU
+#undef P
+}
 void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 {
 #ifdef CONFIG_RT_GROUP_SCHED
