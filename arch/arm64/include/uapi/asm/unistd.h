@@ -20,5 +20,5 @@
 #include <asm-generic/unistd.h>
 
 
-#define __NR_ptree 398
-__SYSCALL(__NR_ptree, sys_ptree)
+//#define __NR_ptree 398
+//__SYSCALL(__NR_ptree, sys_ptree)

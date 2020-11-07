@@ -37,6 +37,9 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
+// #include <sys/types.h>
+// #include <unistd.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
@@ -3038,7 +3041,7 @@ static void print_curr_cpu_weights(void){
 
 }
 
-
+extern void wrr_load_balance(void);
 void scheduler_tick(void)
 {
 	int cpu = smp_processor_id();
@@ -3064,7 +3067,7 @@ void scheduler_tick(void)
         trigger_load_balance(rq);
 
         
-        if(curr->policy===SCHED_WRR) {
+        if(curr->policy==SCHED_WRR) {
             rcu_read_lock();
             if(time_after_eq(jiffies,prev_jiffies +(2*HZ))){
             
@@ -6825,47 +6828,53 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 		printk(KERN_ALERT "Invalid weight\n");
 		return -1;
 	}
+	rcu_read_lock();
 	if(!pid){
 		task = current;
 	} else{
 		task = find_task_by_vpid(pid);
 	}
-	if(task == NULL || task->wrr == NULL || task->wrr->parent == NULL){
+	// if(task == NULL || task->wrr == NULL || task->wrr->parent == NULL){
+	if(task == NULL || task->wrr.parent == NULL){
 		printk(KERN_ALERT "Task struct is not initialized\n");
+		rcu_read_unlock();
 		return -1;
 	}
 	if(task->policy != SCHED_WRR){
 		printk(KERN_ALERT "Tried to change weight of process not on WRR scheduler.\n");
+		rcu_read_unlock();
 		return -1;
 	}
 	
-	struct sched_wrr_entity *we = task->wrr;
-	struct wrr_rq *wrr_q = we->parent;
-	int task_weight = we->weight;
+	struct sched_wrr_entity we = task->wrr;
+	struct wrr_rq *wrr_q = we.parent;
+	int task_weight = we.weight;
+	const struct cred *cred = current_cred();
+	kuid_t root_uid;
+	root_uid.val = 0;
 	if(task_weight > weight){
-		if(geteuid() == 0){ 
-			rcu_read_lock();
+		if(uid_eq(cred->euid, root_uid)){ 
 			wrr_q->sum += weight - task_weight; 
-			we->weight = weight;
-			we->time_slice = weight * 10;
-			rcu_read_unlock();
+			we.weight = weight;
+			we.time_slice = weight * 10;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
+			rcu_read_unlock();
 			return -1;
 		}
 	}
 	else if(task_weight < weight){
-		if(geteuid() == 0 || geteuid() == task->cred->uid){
-			rcu_read_lock();
+		if(uid_eq(cred->euid, root_uid) || check_same_owner(task)){
 			wrr_q->sum += weight - task_weight;
-			we->weight = weight;
-			we->time_slice = weight * 10;
-			rcu_read_unlock();
+			we.weight = weight;
+			we.time_slice = weight * 10;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
+			rcu_read_unlock();
 			return -1;
 		}
 	}
+	rcu_read_unlock();
 	return 0;
 }
 
@@ -6882,7 +6891,8 @@ asmlinkage long sched_getweight(pid_t pid)
 	} else{
 		task = find_task_by_vpid(pid);
 	}
-	if(task == NULL || task->wrr == NULL){
+	// if(task == NULL || task->wrr == NULL){
+	if(task == NULL){
 		printk(KERN_ALERT "Task struct is not initialized\n");
 		return -1;
 	}

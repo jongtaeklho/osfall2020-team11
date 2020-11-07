@@ -10,9 +10,9 @@
 #define SCHED_SETWEIGHT 398
 #define SCHED_GETWEIGHT 399
 
-float prime_factorization(int n_origin)
+void prime_factorization(long long  n_origin)
 {
-    int n;
+    long long n;
     int primes_size;
     int i;
     int *primes;
@@ -29,11 +29,11 @@ float prime_factorization(int n_origin)
         primes[i] = 2;
     }
     i = 3;
-    while (i <= floor(sqrt(n)))
+    while (i * i <= n)
     {
         if (!(n % i))
         {
-            n /= i;
+            n /= (long long)i;
             primes_size++;
             primes = (int *)realloc(primes, primes_size * sizeof(int));
             primes[primes_size - 1] = i;
@@ -49,18 +49,18 @@ float prime_factorization(int n_origin)
         primes = (int *)realloc(primes, primes_size * sizeof(int));
         primes[primes_size - 1] = n;
     }
-    printf("Prime factorization of %d: ", n_origin);
-    int product = 1;
+    printf("Prime factorization of %lld: ", n_origin);
+    long long product = 1;
     for (i = 0; i < primes_size; i++)
     {
         printf("%d ", primes[i]);
-        product *= primes[i];
+        product *= (long long)primes[i];
         if (i + 1 != primes_size)
         {
             printf("x ");
         }
     }
-    printf("\nProduct from prime factorization: %d\n", product);
+    printf("\nProduct from prime factorization: %lld\n", product);
     return;
 }
 
@@ -68,7 +68,7 @@ int main()
 {
     pid_t pids[NUM_PROCESS];
     int weights[NUM_PROCESS];
-    int num;
+    long long num;
 
     clock_t start, end;
     int status;
@@ -78,7 +78,7 @@ int main()
     for (i = 0; i < NUM_PROCESS; i++)
     {
         weights[i] = 2 * i + 1;
-        num = 2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
+        num = (long long)2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
         pids[i] = fork();
         if (pids[i] < 0)
         {

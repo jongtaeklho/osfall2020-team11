@@ -552,10 +552,8 @@ struct rt_rq {
 
 struct wrr_rq {
         unsigned long long sum;
-        wrr_entity* head;
-        wrr_entity* tail;
-		struct wrr_rq wrr;
-
+        struct sched_wrr_entity* head;
+        struct sched_wrr_entity* tail;
 };
 
 
@@ -727,7 +725,7 @@ struct rq {
 	struct cfs_rq cfs;
 	struct rt_rq rt;
 	struct dl_rq dl;
-        struct wrr_rq wrr;
+    struct wrr_rq wrr;
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
 	struct list_head leaf_cfs_rq_list;
