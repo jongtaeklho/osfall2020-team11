@@ -132,13 +132,24 @@ static int migrate_task_wrr(int src_cpu,int dst_cpu{
     int src_weight, dst_weight;
     int max_;
     rcu_read_lock();
+<<<<<<< HEAD
+    rq_src=cpu_rq(src_cpu);
+    rq_dst=cup_rq(dst_cpu);
+    max_=0;
+    src_weight=rq_src->wrr.sum;
+    dst_weight=rq_dst->wrr.sum;
+    struct sched_wrr_entity *tmp=rq_src->wrr->head->nxt;
+    while(!tmp!=rq_src->wrr->tail){
+    curr=tmp->parent_t;
+    if(can_migrate(rq_src,curr,dst_cpu)&&tmp.weight>max_&&dst_weight+tmp.weight<=src_weight-tmp.weight)
+
     rq_src = cpu_rq(src_cpu);
     rq_dst = cup_rq(dst_cpu);
     max_ = 0;
     src_weight = rq_src->wrr.sum;
     dst_weight = rq_dst->wrr.sum;
-    struct sched_wrr_entity *tmp = rq_src->wrr->head;
-    while (!tmp != rq_src->wrr->tail)
+    struct sched_wrr_entity *tmp = rq_src->wrr->head->nxt;
+    while (tmp != rq_src->wrr->tail)
     {
         curr = tmp->parent_t;
         if (can_migrate(rq_src, curr, dst_cpu) && tmp.weight > max_ && dst_weight + tmp.weight <= src_weight - tmp.weight)
