@@ -29,6 +29,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 
 static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
+
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
     struct sched_wrr_entity *head, *tail;
@@ -70,17 +71,18 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
 {
     struct sched_wrr_entity *ptr = rq->wrr.head;
     int i;
-    rcu_read_lock();
+    
 
     for (i = 0; i < 2; i++)
     {
         ptr = ptr->nxt;
         if (ptr == rq->wrr.tail)
-            return NULL;
+            {
+                return NULL;
+            }
     }
     rq->curr = ptr->parent_t;
     ptr->parent_t->se.exec_start=rq->clock_task;
-    rcu_read_unlock();
     return ptr->parent_t;
 }
 
@@ -90,10 +92,10 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 
     if (p->policy != SCHED_WRR)
         return;
-    rcu_read_lock();
+    
     if (--p->wrr.time_slice)
         return;
-
+    rcu_read_lock();
     p->wrr.time_slice = p->wrr.weight * WRR_TIMESLICE;
 
     rq->wrr.head->nxt = wrr_se->nxt;
@@ -174,7 +176,7 @@ static int migrate_task_wrr(int src_cpu, int dst_cpu)
         }
         printk(KERN_ALERT "no migrateble task");
         return 0;
-    }
+    
 }
 void wrr_load_balance(void)
 {
@@ -232,7 +234,7 @@ static void yield_task_wrr(struct rq *rq)
 static int
 select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)
 {
-    s
+    
     int selected_cpu = task_cpu(p);    
 	if (p->nr_cpus_allowed == 1)
         return selected_cpu;
