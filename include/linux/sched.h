@@ -451,14 +451,13 @@ struct sched_entity {
 };
 
 struct sched_wrr_entity {
-        long weight;
-        struct sched_entity se;
-        struct sched_wrr_entity *nxt;
-        struct sched_wrr_entity *pre;
-        long time_slice;
-        struct wrr_rq *parent;
-	struct task_struct * parent_t;
-
+	long weight;
+	struct sched_entity se;
+	struct sched_wrr_entity *nxt;
+	struct sched_wrr_entity *pre;
+	long time_slice;
+	struct wrr_rq *parent;
+	struct task_struct *parent_t;
 };
 
 

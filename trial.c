@@ -93,7 +93,7 @@ int main()
                 printf("Failed to set scheduler, pid: %d\n", pid);
                 return -1;
             }
-            if (syscall(SCHED_SETWEIGHT, pid, weights[i]))
+            if (syscall(SCHED_SETWEIGHT, pid, weights[i]) < 0)
             {
                 printf("Failed to set weight for scheduler, pid: %d\n", pid);
                 return -1;

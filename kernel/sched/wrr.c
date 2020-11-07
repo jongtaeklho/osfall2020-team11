@@ -250,7 +250,7 @@ select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags
     int cpu;
     int ans=select_cpu;
     rcu_read_lock();
-    rq = cpu_rq(selected_cpu);
+    struct rq* rq = cpu_rq(selected_cpu);
     for_each_online_cpu(cpu)
     {
         if (cpu == NO_CPU)

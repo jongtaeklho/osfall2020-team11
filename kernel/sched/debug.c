@@ -740,7 +740,8 @@ do {									\
 	print_cfs_stats(m, cpu);
 	print_rt_stats(m, cpu);
 	print_dl_stats(m, cpu);
-
+	print_wrr_stats(m, cpu);
+	print_wrr_rq(m, cpu, rq->wrr);
 	print_rq(m, rq, cpu);
 	spin_unlock_irqrestore(&sched_debug_lock, flags);
 	SEQ_printf(m, "\n");
