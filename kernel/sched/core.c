@@ -2371,7 +2371,11 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (PRIO_TO_NICE(p->static_prio) < 0)
+		} else if(p->policy==SCHED_WRR){
+                    p->wrr.weight=10;
+                    p->wrr.time_slice=100;
+                } 
+                else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
 
 		p->prio = p->normal_prio = __normal_prio(p);
@@ -2387,7 +2391,11 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	if (dl_prio(p->prio)) {
 		put_cpu();
 		return -EAGAIN;
-	} else if (rt_prio(p->prio)) {
+	} else if(p->policy==SCHED_WRR){
+                p->sched_class=&wrr_sched_class;
+        }
+
+         else if (rt_prio(p->prio)) {
 		p->sched_class = &rt_sched_class;
 	} else {
 		p->sched_class = &fair_sched_class;
@@ -3017,6 +3025,20 @@ unsigned long long task_sched_runtime(struct task_struct *p)
  * This function gets called by the timer code, with HZ frequency.
  * We call it with interrupts disabled.
  */
+static void print_curr_cpu_weights(void){
+    int cpu;
+    struct rq* rq;
+    rcu_read_lock();
+        for_each_possible_cpu(cpu){
+            rq=cpu_rq(cpu);
+            printk(KERN_ALERT "cpu: %d, weight_sum: %ld\n", cpu, rq->wrr.sum);
+	}
+	printk(KERN_ALERT "\n");
+	rcu_read_unlock();
+
+}
+
+
 void scheduler_tick(void)
 {
 	int cpu = smp_processor_id();
@@ -4004,6 +4026,10 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
+        else if (p->policy==SCHED_WRR){
+                p->sched_class=&wrr_sched_class;
+                p->wrr.weight=10;
+        }
 	else
 		p->sched_class = &fair_sched_class;
 }
@@ -4071,6 +4097,7 @@ recheck:
 	/*
 	 * Allow unprivileged RT tasks to decrease priority:
 	 */
+        if(policy != SCHED_WRR) {
 	if (user && !capable(CAP_SYS_NICE)) {
 		if (fair_policy(policy)) {
 			if (attr->sched_nice < task_nice(p) &&
@@ -4118,7 +4145,7 @@ recheck:
 		if (p->sched_reset_on_fork && !reset_on_fork)
 			return -EPERM;
 	}
-
+        }
 	if (user) {
 		retval = security_task_setscheduler(p);
 		if (retval)
@@ -4150,7 +4177,9 @@ recheck:
 	if (unlikely(policy == p->policy)) {
 		if (fair_policy(policy) && attr->sched_nice != task_nice(p))
 			goto change;
-		if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
+		if (wrr_policy(policy)) 
+                        goto change;
+                if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
 			goto change;
 		if (dl_policy(policy) && dl_param_changed(p, attr))
 			goto change;
@@ -5103,6 +5132,7 @@ SYSCALL_DEFINE1(sched_get_priority_min, int, policy)
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
+        case SCHED_WRR:
 		ret = 0;
 	}
 	return ret;
@@ -5771,7 +5801,7 @@ void __init sched_init_smp(void)
 	init_sched_rt_class();
         init_sched_wrr_class();
 	init_sched_dl_class();
-
+        
 	sched_smp_initialized = true;
 }
 
@@ -5884,7 +5914,8 @@ void __init sched_init(void)
 		rq->calc_load_active = 0;
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs);
-		init_rt_rq(&rq->rt);
+		init_wrr_rq(&rq->wrr);
+                init_rt_rq(&rq->rt);
 		init_dl_rq(&rq->dl);
 #ifdef CONFIG_FAIR_GROUP_SCHED
 		root_task_group.shares = ROOT_TASK_GROUP_LOAD;
