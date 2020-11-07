@@ -1,12 +1,13 @@
 #include "sched.h"
 
 #define WRR_TIMESLICE HZ / 100
-#define NO_CPU 1
+#define NO_CPU 1000
 
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
 
 void __init init_sched_wrr_class(void)
 {
+    printk(KERN_INFO "init_sched_wrr_class\n");
     unsigned int i;
 
     for_each_possible_cpu(i)
@@ -19,6 +20,7 @@ void __init init_sched_wrr_class(void)
 
 void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
+    printk(KERN_INFO "init_wrr_rq\n");
     wrr_rq->sum = 0;
    
     wrr_rq->head = &wrr_rq->dummy1;
@@ -29,7 +31,8 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 
 static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
-
+    printk(KERN_INFO "enqueue_task_wrr\n");
+    
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
     struct sched_wrr_entity *head, *tail;
@@ -56,6 +59,8 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 
 static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
+    printk(KERN_INFO "dequeue_task_wrr\n");
+    
     struct sched_wrr_entity *wrr_se = &p->wrr;
     rcu_read_lock();
 
@@ -69,6 +74,8 @@ static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 
 static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
+    printk(KERN_INFO "pick_next_task_wrr\n");
+    
     struct sched_wrr_entity *ptr = rq->wrr.head;
     int i;
     
@@ -88,6 +95,8 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
 
 static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
+    printk(KERN_INFO "task_tick_wrr\n");
+    
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
     if (p->policy != SCHED_WRR)
@@ -111,6 +120,8 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 
 static int can_migrate(struct rq *rq, struct task_struct *p, int dst_cpu)
 {
+    printk(KERN_INFO "can_migrate\n");
+    
     if (task_current(rq, p) && p->nr_cpus_allowed > 1 && cpumask_test_cpu(dst_cpu, &(p)->cpus_allowed))
         return 1;
 
@@ -119,6 +130,8 @@ static int can_migrate(struct rq *rq, struct task_struct *p, int dst_cpu)
 
 static int migrate_task_wrr(int src_cpu, int dst_cpu)
 {
+    printk(KERN_INFO "migrate_task_wrr\n");
+    
     struct sched_wrr_entity *wrr_se;
     struct rq *rq_dst;
     struct rq *rq_src;
@@ -180,6 +193,8 @@ static int migrate_task_wrr(int src_cpu, int dst_cpu)
 }
 void wrr_load_balance(void)
 {
+    printk(KERN_INFO "wrr_load_balance\n");
+    
     int src_cpu, dst_cpu;
     struct rq *rq;
     int max_ = 0;
@@ -234,6 +249,7 @@ static void yield_task_wrr(struct rq *rq)
 static int
 select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)
 {
+    printk(KERN_INFO "select_task_rq_wrr\n");
     
     int selected_cpu = task_cpu(p);    
 	if (p->nr_cpus_allowed == 1)
@@ -289,6 +305,8 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 
 static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
 {
+    printk(KERN_INFO "get_rr_interval_wrr\n");
+    
     /*
 	 * Time slice is 0 for SCHED_FIFO tasks
 	 */
@@ -307,6 +325,8 @@ prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 {
     printk(KERN_INFO "switched_to\n");
+    struct sched_wrr_entity *wrr_e = &p->wrr;
+    wrr_e->time_slice = wrr_e->weight * WRR_TIMESLICE;
 }
 
 static void update_curr_wrr(struct rq *rq)
