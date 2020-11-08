@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
                 printf("Failed to set scheduler. pid: %d, weight: %d\n", getpid(), weight);
                 return -1;
             }
-            int ret;
+            int w;
             if ((syscall(SCHED_SETWEIGHT, getpid(), weight)) != 0) {
 				if(weight>20 || weight <1)
 					printf("Invalid weight\n");
@@ -96,7 +96,8 @@ int main(int argc, char *argv[]) {
                 return -1;
             }
 			else{
-				ret=syscall(SCHED_GETWEIGHT, 0);
+			    w=syscall(SCHED_GETWEIGHT, 0);
+                printf("weight of pid (%d): %d\n", getpid(), w);
 			}
             fact_thread(n, weight);
         }
