@@ -85,8 +85,7 @@ int main(int argc, char *argv[])
     int sched_weight;
     for (i = 0; i < num_process; i++)
     {
-        weights[i] = 2 * i + 1;
-        // num = (long long)2 * 2 * 3 * 3 * 3 * 3 * 5 * 7 * 9 * 11 * 13 * 13 * 17 * 17 * 23 * 59; 
+        weights[i] = (int)(20. / num_process * i) + 1;
         pids[i] = fork();
         if (pids[i] < 0)
         {
@@ -108,13 +107,13 @@ int main(int argc, char *argv[])
             }
             else
             {
-                sched_weight = syscall(SCHED_GETWEIGHT, 0);
+                sched_weight = syscall(SCHED_GETWEIGHT, pid);
                 printf("weight of scheduled process: %d\n", sched_weight);
                 clock_gettime(CLOCK_MONOTONIC, &start);
                 prime_factorization(num2factor);
                 clock_gettime(CLOCK_MONOTONIC, &end);
                 elapsed_time = end.tv_sec - start.tv_sec + (float)(end.tv_nsec - start.tv_nsec) / 1000000000;
-                printf("Elapsed time: %f, pid: %d, weight: %d\n", elapsed_time, getpid(), weights[i]);
+                printf("Elapsed time: %f, pid: %d, weight: %d\n", elapsed_time, pid, weights[i]);
                 exit(0);
             }
         }

@@ -85,7 +85,7 @@ __read_mostly int scheduler_running;
  * default: 0.95s
  */
 int sysctl_sched_rt_runtime = 950000;
-static unsigned long prev_jiffies;
+static unsigned long old_jiffies;
 /* CPUs with isolated domains */
 cpumask_var_t cpu_isolated_map;
 
@@ -3034,7 +3034,7 @@ static void print_curr_cpu_weights(void){
     rcu_read_lock();
         for_each_possible_cpu(cpu){
             rq=cpu_rq(cpu);
-            printk(KERN_ALERT "cpu: %d, weight_sum: %ld\n", cpu, rq->wrr.sum);
+            printk(KERN_ALERT "cpu: %d, sum of weights: %ld\n", cpu, rq->wrr.sum);
 	}
 	printk(KERN_ALERT "\n");
 	rcu_read_unlock();
@@ -3069,7 +3069,7 @@ void scheduler_tick(void)
         
         if(curr->policy==SCHED_WRR) {
             rcu_read_lock();
-            if(time_after_eq(jiffies,prev_jiffies +(2*HZ))){
+            if(time_after_eq(jiffies,old_jiffies + (2 * HZ))){
             
                 printk(KERN_ALERT "load balance start\n");
                 print_curr_cpu_weights();
@@ -3078,7 +3078,7 @@ void scheduler_tick(void)
                 preempt_enable();
                 printk(KERN_ALERT "load balance end\n");
                 print_curr_cpu_weights();
-                prev_jiffies=jiffies;
+                old_jiffies=jiffies;
 
 
             }    
@@ -5826,7 +5826,7 @@ void __init sched_init_smp(void)
 	sched_init_granularity();
 	free_cpumask_var(non_isolated_cpus);
         
-        prev_jiffies= jiffies;
+        old_jiffies= jiffies;
 	init_sched_rt_class();
         init_sched_wrr_class();
 	init_sched_dl_class();
@@ -6882,7 +6882,7 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 		if(uid_eq(cred->euid, root_uid)){ 
 			wrr_q->sum += weight - task_weight; 
 			we.weight = weight;
-			we.time_slice = weight * 10;
+			we.time_slice = weight * HZ / 100;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
 			rcu_read_unlock();
@@ -6893,7 +6893,7 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 		if(uid_eq(cred->euid, root_uid) || check_same_owner(task)){
 			wrr_q->sum += weight - task_weight;
 			we.weight = weight;
-			we.time_slice = weight * 10;
+			we.time_slice = weight * HZ / 100;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
 			rcu_read_unlock();
