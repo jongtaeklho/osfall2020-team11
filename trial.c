@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
     int weights[num_process];
     int status;
     int i;
+    int j;
     struct sched_param param;
     param.sched_priority = 99;
     int sched_weight;
@@ -102,7 +103,7 @@ int main(int argc, char *argv[])
             }
             if (syscall(SCHED_SETWEIGHT, pid, weights[i]) < 0)
             {
-                printf("Failed to set weight for scheduler, pid: %d\n", pid);
+                printf("Failed to set weight for scheduler, pid: %d, weight:%d\n", pid, weights[i]);
                 return -1;
             }
             else
@@ -110,10 +111,11 @@ int main(int argc, char *argv[])
                 sched_weight = syscall(SCHED_GETWEIGHT, pid);
                 // printf("weight of scheduled process: %d\n", sched_weight);
                 clock_gettime(CLOCK_MONOTONIC, &start);
-                prime_factorization(num2factor);
+                for(j = 0; j < 10;j++)
+                    prime_factorization(num2factor);
                 clock_gettime(CLOCK_MONOTONIC, &end);
                 elapsed_time = end.tv_sec - start.tv_sec + (float)(end.tv_nsec - start.tv_nsec) / 1000000000;
-                printf("Elapsed time: %f, pid: %d, weight: %d\n", elapsed_time, pid, weights[i]);
+                printf("Total time for 10 factorization: %f, pid: %d, weight: %d\n", elapsed_time, pid, weights[i]);
                 exit(0);
             }
         }
