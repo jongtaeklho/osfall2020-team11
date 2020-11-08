@@ -33,11 +33,10 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
     // printk(KERN_INFO "enqueue_task_wrr\n");
-
+    printk(KERN_INFO "enqueue, pid:%d\n", p->pid);
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
     struct sched_wrr_entity *head, *tail;
-    wrr_se->weight = 10;
     wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 
     rcu_read_lock();
@@ -236,6 +235,11 @@ void wrr_load_balance(void)
     if (min_ == 100000000 || max_ == 0)
     {
         printk(KERN_ALERT "NO");
+        rcu_read_unlock();
+        return;
+    }
+    if(min_ == max_ || dst_cpu == src_cpu){
+        printk(KERN_ALERT "NO.");
         rcu_read_unlock();
         return;
     }

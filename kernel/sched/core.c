@@ -3071,11 +3071,11 @@ void scheduler_tick(void)
         if(curr->policy==SCHED_WRR) {
             rcu_read_lock();
             if(time_after_eq(jiffies,old_jiffies + (2 * HZ))){
+                preempt_disable();
 				printk(KERN_INFO "jiffies:%ul, old_jiffies:%ul, HZ:%d\n", jiffies, old_jiffies, HZ);
                 old_jiffies=jiffies;
                 printk(KERN_ALERT "load balance start\n");
                 print_curr_cpu_weights();
-                preempt_disable();
                 wrr_load_balance();
                 preempt_enable();
                 printk(KERN_ALERT "load balance end\n");
