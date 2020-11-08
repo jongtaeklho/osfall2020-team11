@@ -114,6 +114,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 
     wrr_se->nxt = rq->wrr.tail;
     rq->wrr.tail->pre = wrr_se;
+    set_tsk_need_resched(p);
     rcu_read_unlock();
 }
 

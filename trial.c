@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     int sched_weight;
     for (i = 0; i < num_process; i++)
     {
-        weights[i] = (int)(20. / num_process * i) + 1;
+        weights[i] = (3 * i + 1) % 20;
         pids[i] = fork();
         if (pids[i] < 0)
         {
