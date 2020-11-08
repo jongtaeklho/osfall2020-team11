@@ -48,7 +48,7 @@ void prime_factorization(long long n_origin)
         primes = (int *)realloc(primes, primes_size * sizeof(int));
         primes[primes_size - 1] = n;
     }
-    printf("Prime factorization of %lld: ", n_origin);
+    printf("%lld = ", n_origin);
     long long product = 1;
     for (i = 0; i < primes_size; i++)
     {
@@ -59,7 +59,7 @@ void prime_factorization(long long n_origin)
             printf("x ");
         }
     }
-    printf("\nProduct from prime factorization: %lld\n", product);
+    // printf("\nProduct from prime factorization: %lld\n", product);
     return;
 }
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
             else
             {
                 sched_weight = syscall(SCHED_GETWEIGHT, pid);
-                printf("weight of scheduled process: %d\n", sched_weight);
+                // printf("weight of scheduled process: %d\n", sched_weight);
                 clock_gettime(CLOCK_MONOTONIC, &start);
                 prime_factorization(num2factor);
                 clock_gettime(CLOCK_MONOTONIC, &end);
@@ -121,9 +121,9 @@ int main(int argc, char *argv[])
     for (i = 0; i < num_process; i++){
         pid_t wait_pid = waitpid(pids[i], &status, 0);
         if(!WIFEXITED(status)){
-            printf("Error while process (%d).\n", wait_pid);
+            // printf("Error while process (%d).\n", wait_pid);
         } else{
-            printf("Process %d terminated. Status: %d\n", wait_pid, WEXITSTATUS(status));
+            // printf("Process %d terminated. Status: %d\n", wait_pid, WEXITSTATUS(status));
         }
     }
     return 0;

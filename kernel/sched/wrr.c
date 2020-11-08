@@ -33,7 +33,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
     // printk(KERN_INFO "enqueue_task_wrr\n");
-    printk(KERN_INFO "enqueue, pid:%d\n", p->pid);
+    // printk(KERN_INFO "enqueue, pid:%d\n", p->pid);
     struct sched_wrr_entity *wrr_se = &p->wrr;
 
     struct sched_wrr_entity *head, *tail;
@@ -171,7 +171,7 @@ static int migrate_task_wrr(int src_cpu, int dst_cpu)
         }
         if (!cpumask_test_cpu(dst_cpu, &(migrate_task->cpus_allowed)))
         {
-            printk(KERN_ALERT "failed");
+            // printk(KERN_ALERT "failed");
             double_rq_unlock(rq_src, rq_dst);
             raw_spin_unlock(&migrate_task->pi_lock);
             return 0;
@@ -187,7 +187,7 @@ static int migrate_task_wrr(int src_cpu, int dst_cpu)
         raw_spin_unlock(&migrate_task->pi_lock);
         return 1;
     }
-    printk(KERN_ALERT "no migrateble task");
+    // printk(KERN_ALERT "no migrateble task");
     return 0;
 }
 void wrr_load_balance(void)
@@ -205,7 +205,7 @@ void wrr_load_balance(void)
 
     if (unlikely(!cpu_active_mask) && num_active_cpus() < 1)
     {
-        printk(KERN_ALERT "NO ACTIVE CPUS");
+        // printk(KERN_ALERT "NO ACTIVE CPUS");
         return;
     }
     rcu_read_lock();
@@ -228,18 +228,18 @@ void wrr_load_balance(void)
     }
     if (min_ == 100000000 || max_ == 0)
     {
-        printk(KERN_ALERT "NO");
+        // printk(KERN_ALERT "NO");
         rcu_read_unlock();
         return;
     }
     if(min_ == max_ || dst_cpu == src_cpu){
-        printk(KERN_ALERT "NO.");
+        // printk(KERN_ALERT "NO.");
         rcu_read_unlock();
         return;
     }
     if (dst_cpu == NO_CPU)
     {
-        printk(KERN_ALERT "NO");
+        // printk(KERN_ALERT "NO");
         rcu_read_unlock();
         return;
     }
@@ -247,7 +247,7 @@ void wrr_load_balance(void)
     rcu_read_unlock();
     if (!migrate_task_wrr(src_cpu, dst_cpu))
     {
-        printk(KERN_ALERT "NONO...\n");
+        // printk(KERN_ALERT "NONO...\n");
     }
     return;
 }
