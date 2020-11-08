@@ -2376,7 +2376,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->rt_priority = 0;
 		} else if(p->policy==SCHED_WRR){
                     p->wrr.weight=10;
-                    p->wrr.time_slice=100;
+                    // p->wrr.time_slice=100;
+					p->wrr.time_slice= HZ / 10;
                 } 
                 else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
@@ -3070,7 +3071,8 @@ void scheduler_tick(void)
         if(curr->policy==SCHED_WRR) {
             rcu_read_lock();
             if(time_after_eq(jiffies,old_jiffies + (2 * HZ))){
-            
+				printk(KERN_INFO "jiffies:%d, old_jiffies:%d, HZ:%d\n", jiffies, old_jiffies, HZ);
+                old_jiffies=jiffies;
                 printk(KERN_ALERT "load balance start\n");
                 print_curr_cpu_weights();
                 preempt_disable();
@@ -3078,7 +3080,6 @@ void scheduler_tick(void)
                 preempt_enable();
                 printk(KERN_ALERT "load balance end\n");
                 print_curr_cpu_weights();
-                old_jiffies=jiffies;
 
 
             }    
@@ -5826,10 +5827,10 @@ void __init sched_init_smp(void)
 	sched_init_granularity();
 	free_cpumask_var(non_isolated_cpus);
         
-        old_jiffies= jiffies;
 	init_sched_rt_class();
-        init_sched_wrr_class();
+    init_sched_wrr_class();
 	init_sched_dl_class();
+    old_jiffies= jiffies;
         
 	sched_smp_initialized = true;
 }
@@ -6872,17 +6873,17 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 		return -1;
 	}
 	
-	struct sched_wrr_entity we = task->wrr;
-	struct wrr_rq *wrr_q = we.parent;
-	int task_weight = we.weight;
+	struct sched_wrr_entity *we = &task->wrr;
+	struct wrr_rq *wrr_q = we->parent;
+	int task_weight = we->weight;
 	const struct cred *cred = current_cred();
 	kuid_t root_uid;
 	root_uid.val = 0;
 	if(task_weight > weight){
 		if(uid_eq(cred->euid, root_uid)){ 
 			wrr_q->sum += weight - task_weight; 
-			we.weight = weight;
-			we.time_slice = weight * HZ / 100;
+			we->weight = weight;
+			we->time_slice = weight * HZ / 100;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
 			rcu_read_unlock();
@@ -6892,8 +6893,8 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 	else if(task_weight < weight){
 		if(uid_eq(cred->euid, root_uid) || check_same_owner(task)){
 			wrr_q->sum += weight - task_weight;
-			we.weight = weight;
-			we.time_slice = weight * HZ / 100;
+			we->weight = weight;
+			we->time_slice = weight * HZ / 100;
 		} else{
 			printk(KERN_ALERT "The user is not authorized.\n");
 			rcu_read_unlock();
@@ -6912,7 +6913,7 @@ asmlinkage long sched_setweight(pid_t pid, int weight)
 asmlinkage long sched_getweight(pid_t pid)
 {
 	struct task_struct *task;
-	if(!pid){
+	if(pid == 0){
 		task = current;
 	} else{
 		task = find_task_by_vpid(pid);

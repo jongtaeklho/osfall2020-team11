@@ -229,6 +229,7 @@ void wrr_load_balance(void)
     if (min_ == 100000000 || max_ == 0)
     {
         printk(KERN_ALERT "NO");
+        rcu_read_unlock();
         return;
     }
     rcu_read_unlock();
