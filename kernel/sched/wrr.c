@@ -1,7 +1,7 @@
 #include "sched.h"
 
 #define SCHED_WRR 7
-#define WRR_TIMESLICE ((HZ) / 100)
+#define WRR_TIMESLICE ((HZ)/ 100)
 #define NO_CPU 0
 
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
@@ -214,14 +214,7 @@ void wrr_load_balance(void)
     {
         rq = cpu_rq(cpu);
         if (cpu == NO_CPU)
-        {
-            if (num_active_cpus() == 1)
-            {
-                printk("Only NO_CPU is available\n");
-            }
             continue;
-        }
-
         if (min_ > rq->wrr.sum)
         {
             min_ = rq->wrr.sum;
@@ -246,8 +239,11 @@ void wrr_load_balance(void)
     }
     if (dst_cpu == NO_CPU)
     {
-        dst_cpu = 0;
+        printk(KERN_ALERT "NO");
+        rcu_read_unlock();
+        return;
     }
+    if(dst_cpu==NO_CPU) dst_cpu=0;
     rcu_read_unlock();
     if (!migrate_task_wrr(src_cpu, dst_cpu))
     {
@@ -269,14 +265,9 @@ select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags
 
     int selected_cpu = task_cpu(p);
     if (p->nr_cpus_allowed == 1)
-    {
-        printk(KERN_INFO "Only 1 cpu available\n");
-    }
-    if (sd_flag != SD_BALANCE_FORK)
-    {
-        printk(KERN_INFO "sd_flag\n");
         return selected_cpu;
-    }
+    if (sd_flag != SD_BALANCE_FORK)
+        return selected_cpu;
     int cpu;
     int ans = selected_cpu;
     rcu_read_lock();
