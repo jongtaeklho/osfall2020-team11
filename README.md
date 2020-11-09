@@ -80,19 +80,19 @@ const struct sched_class wrr_sched_class = {
     .update_curr = update_curr_wrr};
 ```   
 wrr.c는 위의 함수들로 구성되어 있다. 이 함수들 중 이번 WRR 스케줄링 정책에서 구현한 주요 함수들은 `enqueue_task_wrr`, `dequeue_task_wrr`, `pick_next_task_wrr`, `select_task_rq_wrr`, `task_tick_wrr`이다.
-### `enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`  
+### enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 인자로 rq와 task_struct를 받는다. 주어진 task_struct를 rq->wrr에 linked list형태로 삽입한다. rq->wrr에 삽입할 때 `struct sched_wrr_entity`형태로 삽입하며 rq->wrr.sum에 삽입하는 task의 weight를 추가한다.
 
-### `dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)`  
+### dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags) 
 rq->wrr에서 주어진 task_struct를 빼준다.
 
-### `pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)`  
+### pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 rq->wrr에서 실행중인 task의 다음에 연결되어 있는 task를 return 해준다. 이때 만약 다음 task가 없다면 NULL return한다.
 
-### `select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags)`  
+### select_task_rq_wrr(struct task_struct *p, int select_cpu, int sd_flag, int flags) 
 현재 실행중인 cpu중 런큐에 있는 task들의 weight의 총합이 가장 작은 cpu를 return한다.
 
-### `task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)`  
+### task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 kernel/sched/core.c에서 매 time_slice마다 호출되며 만약 p의 주어진 time_slice가 0이하라면 cpu를 반납하고 rq->wrr의 제일 뒤로 옮겨진다.   
 
 ## Load Balancing
@@ -111,7 +111,7 @@ kernel/sched/core.c에서 매 time_slice마다 호출되며 만약 p의 주어�
 
 
 # Improvement
-
+이번 과제에서는 스케줄링할 때 task들의 weight를 10으로 고정하고, 테스팅할 때 임의로 task의 weight를 변경하였다. 스케줄러에서 task가 cpu를 점유한 시간을 저장하고 그 시간이 많다면 해당하는 task의 weight를 줄여주준다면 각 task들을 좀 더 공평하게 스케줄링 할 수 있을 것이다. 그렇게 되면 계속해서 cpu를 점유한 task의 weight가 많이 작아질 수 있다. weight를 계속 유지하는 것이 아니라 시간을 정해놓고 일정 시간이 지나면 다시 weight를 리셋해서 이러한 경우를 방지할 수 잇을 것이다.
 
 
 
