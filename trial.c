@@ -9,10 +9,17 @@
 #include <sched.h>
 #include <errno.h>
 
+// ./trial 1 492660
+// ./trial 5 492660
+// ./trial 10 492660
+
+
 #define SCHED_WRR 7
 #define SCHED_SETWEIGHT 398
 #define SCHED_GETWEIGHT 399
+#define ITERATION 10
 
+// 492660 = 2*2*3*5*3*7*17*23
 void factorize_prime(int n_origin)
 {
     int n;
@@ -24,7 +31,7 @@ void factorize_prime(int n_origin)
     }
     if (n_origin > 1)
     {
-        for (j = 0; j < 10; j++)
+        for (j = 0; j < ITERATION; j++)
         {
             n = n_origin;
 
@@ -63,8 +70,8 @@ void fact_thread(int n, int weight)
     clock_gettime(CLOCK_MONOTONIC, &start);
     factorize_prime(n);
     clock_gettime(CLOCK_MONOTONIC, &end);
-    elapsed = end.tv_sec - start.tv_sec + (float)(end.tv_nsec - start.tv_nsec) / 1000000000;
-    printf("Total time for 10 factorization: %f, weight: %d\n", elapsed, weight);
+    elapsed = end.tv_sec - start.tv_sec + (end.tv_nsec - start.tv_nsec) / 1000000000.;
+    printf("Total time for %d factorization: %f, weight: %d\n", ITERATION, elapsed, weight);
     exit(0);
 }
 
@@ -73,7 +80,7 @@ int main(int argc, char *argv[])
     int status;
     int p;
     struct sched_param param;
-    param.sched_priority = 100;
+    param.sched_priority = 1;
 
     if (argc != 3)
     {
@@ -87,7 +94,7 @@ int main(int argc, char *argv[])
     int i;
     for (i = 0; i < num_processes; i++)
     {
-        int weight = ((3 * i) % 19) + 1;
+        int weight = ((3 * i) % 20) + 1;
 
         if ((pid[i] = fork()) == 0)
         {
