@@ -107,7 +107,8 @@ kernel/sched/core.c에서 매 time_slice마다 호출되며 만약 p의 주어�
 + `asmlinkage long sched_getweight(pid_t pid)` process의 weight를 return해준다.
 
 # Performance
-(https://user-images.githubusercontent.com/48852336/98513267-ef545c00-22aa-11eb-88d7-f3fdb0d1a3b8.png)
+![plot](https://user-images.githubusercontent.com/48852336/98513267-ef545c00-22aa-11eb-88d7-f3fdb0d1a3b8.png)
+
 
 
 # Improvement
