@@ -80,8 +80,8 @@ union bpf_attr;
 #include <linux/quota.h>
 #include <linux/key.h>
 #include <trace/syscall.h>
-/* OS project 1*/
-#include <linux/prinfo.h>
+/* OS project 3*/
+#include <linux/rotation.h>
 /*
  * __MAP - apply a macro to syscall arguments
  * __MAP(n, m, t1, a1, t2, a2, ..., tn, an) will expand to
@@ -943,13 +943,12 @@ asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  unsigned mask, struct statx __user *buffer);
 			  
 
-/* OS project 1*/
-struct prinfo;
-
-// asmlinkage long sys_myprint(void);
-
-asmlinkage int sys_ptree(struct prinfo *buf, int *nr);
-			  
+/* OS project 3*/
+asmlinkage long set_rotation(int degree);
+asmlinkage long rotlock_read(int degree, int range);  
+asmlinkage long rotlock_write(int degree, int range); 
+asmlinkage long rotunlock_read(int degree, int range);
+asmlinkage long rotunlock_write(int degree, int range);			  
 			  
 			  
 
