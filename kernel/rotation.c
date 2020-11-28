@@ -1,3 +1,4 @@
+#include <linux/kernel.h>
 #include <linux/rotation.h>
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -10,20 +11,18 @@
  * syscall number 398 (you may want to check this number!)
  */
 /* 0 <= degree < 360 */
-struct node
-{
-    int rw; // 0: reader 1: writer
-    long st, ed;
-    pid_t pid;
-    // if ed < st:
-    //    범위: st~360, 0~ed
-    struct list_head nodes;
-};
-static int read_cnt, write_cnt;
+
+// static int reader_cnt, writer_cnt;
 static node_t *head_wait = NULL;
 static node_t *head_acquired = NULL;
 DECLARE_WAIT_QUEUE_HEAD(wq_head);
 DEFINE_MUTEX(node_mutex);
+
+atomic_t reader_cnt = ATOMIC_INIT(0);
+atomic_t writer_cnt = ATOMIC_INIT(0);
+DEFINE_MUTEX(wait_mutex);
+DEFINE_MUTEX(acquired_mutex);
+DEFINE_MUTEX(queue_mutex);
 
 static int deg_curr;
 
@@ -31,7 +30,7 @@ asmlinkage long set_rotation(int degree) //error: -1
 {
     printk(KERN_INFO "Set rotation, degree: %d\n", degree);
     deg_curr = degree;
-    wake_up_all(wq_head);
+    wake_up_all(queue_mutex);
     return 0;
 }
 /*
@@ -61,7 +60,7 @@ void gosleep(node_t *cur)
 {
     mutex_lock(&queue_mutex);
     DEFINE_WAIT(wait_queue_entry);
-    prepare_to_wait(cur->wq_head, &wait_queue_entry, TASK_INTERRUPTIBE);
+    prepare_to_wait(cur->wq_head, &wait_queue_entry, TASK_INTERRUPTIBLE);
     mutex_unlock(&queue_mutex);
     schedule();
     mutex_lock(&queue_mutex);
@@ -119,7 +118,7 @@ asmlinkage long rotlock_read(int degree, int range)
                 }
             }
         }
-        writer_cnt = atomic_read(&__writer_cnt);
+        writer_cnt = atomic_read(&writer_cnt);
         if (!isrange(deg_curr, st, ed) || writer_cnt)
         {
             iswriter = 1;
@@ -135,7 +134,7 @@ asmlinkage long rotlock_read(int degree, int range)
     //일어났으면 acquried_head 에다가 추가하고
     //wait_head 빼고
     list_move_tail(new_nodes, head_acquired);
-    atomic_inc(&__reader_cnt);
+    atomic_inc(&reader_cnt);
 
     mutex_unlock(&wait_mutex);
     mutex_unlock(&acquired_mutex);
@@ -182,8 +181,8 @@ asmlinkage long rotlock_write(int degree, int range)
                 break;
             }
         }
-        reader_cnt = atomic_read(&__reader_cnt);
-        writer_cnt = atomic_read(&__writer_cnt);
+        reader_cnt = atomic_read(&reader_cnt);
+        writer_cnt = atomic_read(&writer_cnt);
         if (reader_cnt || writer_cnt || !isrange(deg_curr, st, ed))
         {
             isok = 1;
@@ -197,7 +196,7 @@ asmlinkage long rotlock_write(int degree, int range)
         mutex_lock(&acquired_mutex);
     }
     list_move_tail(new_nodes, head_acquired);
-    atomic_inc(&__writer_cnt);
+    atomic_inc(&writer_cnt);
 
     mutex_unlock(&wait_mutex);
     mutex_unlock(&acquired_mutex);
@@ -245,7 +244,7 @@ asmlinkage long rotunlock_read(int degree, int range)
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            read_cnt--;
+            reader_cnt--;
             kfree(curr);
             mutex_unlock(&node_mutex);
             return 0;
@@ -291,7 +290,7 @@ asmlinkage long rotunlock_write(int degree, int range)
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            write_cnt--;
+            writer_cnt--;
             kfree(curr);
             mutex_unlock(&node_mutex);
             return 0;
