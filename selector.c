@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
     int num = atoi(argv[1]);
     while (1)
     {
-        if (syscall(SYS_ROTLOCK_WRITE, (90, 90)) == -1)
+        if (syscall(SYS_ROTLOCK_WRITE, 90, 90) == -1)
         {
             printf("degree is wrong\n");
             return 0;
@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
         printf("selector: %d\n", num);
         fclose(fp);
         num++;
-        if (syscall(SYS_ROTUNLOCK_WRITE, (90, 90)) == -1)
+        if (syscall(SYS_ROTUNLOCK_WRITE, 90, 90) == -1)
         {
             printf("unlock is wrong\n");
             return 0;
