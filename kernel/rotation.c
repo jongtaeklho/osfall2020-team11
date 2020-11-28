@@ -1,11 +1,15 @@
 #include <linux/kernel.h>
 #include <linux/rotation.h>
 #include <linux/list.h>
+<<<<<<< HEAD
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 
 #define DEG_CHECK(st, ed, deg) (((st) > (ed)) && (((st) <= (deg)) || ((ed) >= (deg)))) || (((st) < (ed)) && (((st) <= (deg)) && ((ed) >= (deg))))
+=======
+#include <linux/mutex.h>
+>>>>>>> 8584bfd1ea060da1d7402fe601fc83c99c1096ef
 /*
  * sets the current device rotation in the kernel.
  * syscall number 398 (you may want to check this number!)
@@ -18,11 +22,28 @@ static node_t *head_acquired = NULL;
 DECLARE_WAIT_QUEUE_HEAD(wq_head);
 DEFINE_MUTEX(node_mutex);
 
+<<<<<<< HEAD
 atomic_t reader_cnt = ATOMIC_INIT(0);
 atomic_t writer_cnt = ATOMIC_INIT(0);
 DEFINE_MUTEX(wait_mutex);
 DEFINE_MUTEX(acquired_mutex);
 DEFINE_MUTEX(queue_mutex);
+=======
+int curr_degree; 
+atomic_t __reader_cnt = ATOMIC_INIT(0);
+atomic_t __writer_cnt = ATOMIC_INIT(0);
+DEFINE_MUTEX(wait_mutex);
+DEFINE_MUTEX(acquired_mutex);
+DEFINE_MUTEX(queue_mutex);
+void init_head_wait() //global waitqueue
+{
+    // wait_queue_entry_t* wq_entry = DEFINE_WAIT(wq_entry);
+    // prepare_to_wait(wq_head, wq_entry, TASK_INTERRUPTABLE);
+    head_wait = &dummy1;
+    INIT_LIST_HEAD(&head_wait->nodes);
+    head_wait->wq_head = DECLARE_WAIT_QUEUE_HEAD(head_wait->wq_head);
+}
+>>>>>>> 8584bfd1ea060da1d7402fe601fc83c99c1096ef
 
 static int deg_curr;
 
@@ -198,6 +219,146 @@ asmlinkage long rotlock_write(int degree, int range)
     list_move_tail(new_nodes, head_acquired);
     atomic_inc(&writer_cnt);
 
+<<<<<<< HEAD
+=======
+    wait_cnt -= cnt;
+    return cnt;
+}
+
+int isrange(int degree, long st, long ed){
+    if( st < ed){
+        if(degree>=st && degree<=ed) return 1;
+        else return 0;
+    }
+    else{
+        if(degree>=st || degree<=ed) return 1;
+        else return 0;
+    }
+}
+void gosleep(node_t* cur){
+    mutex_lock(&queue_mutex);
+    DEFINE_WAIT(wait_queue_entry);
+    prepare_to_wait(cur->wq_head,&wait_queue_entry,TASK_INTERRUPTIBE);
+    mutex_unlock(&queue_mutex);
+    schedule();
+    mutex_lock(&queue_mutex);
+    finish_wait(cur->wq_head, &wait_queue_entry);
+    mutex_unlock(&queue_mutex);
+}
+
+
+
+
+/*
+ * Take a read/or write lock using the given rotation range
+ * returning 0 on success, -1 on failure.
+ * system call numbers 399 and 400
+ */
+asmlinkage long rotlock_read(int degree, int range){
+    if(!(degree>=0 && degree<360)||!(range>0 && range<180 )) return -1;
+    long st = (degree - range + 360) % 360;
+    long ed = (degree + range) % 360;
+    //들어갈수있으면 보내고
+    //재우고
+    node_t* new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    new_nodes->range->st = st;
+    new_nodes->range->ed = ed;
+    new_nodes->rw = 0;
+    int writer_cnt;
+    mutex_lock(&wait_mutex);
+    mutex_lock(&acquired_mutex);
+    list_add_tail(&new_nodes->nodes, head_wait);
+    node_t* curr, nxt;
+    int iswriter;
+    iswriter = 0;
+    while(1){
+        iswriter = 0;
+        list_for_each_entry_safe(curr, nxt, &head_acquired,nodes){
+            if(isrange(curr_degree, curr->range->st, curr->range->ed)&&curr->rw == 1){
+                iswriter = 1;
+                break;
+            }
+        }
+        if(iswriter == 0){
+            list_for_each_entry_safe(curr, nxt, &head_wait, nodes){
+                if(curr == new_nodes){
+                    break;
+                }
+                if(isrange(curr_degree, curr->range->st, curr->range->ed) && curr->rw ==1){
+                    iswriter = 1;
+                    break;
+                }
+            }
+        }
+        writer_cnt = atomic_read(&__writer_cnt);
+        if(!isrange(curr_degree, st, ed)||writer_cnt){
+            iswriter = 1;
+        }
+        if(iswriter == 0) break;
+        mutex_unlock(&wait_mutex);
+        mutex_unlock(&acquired_mutex);
+        gosleep(new_nodes);
+        mutex_lock(&wait_mutex);
+        mutex_lock(&acquired_mutex); 
+    }
+    //일어났으면 acquried_head 에다가 추가하고
+    //wait_head 빼고
+    list_move_tail(new_nodes, head_acquired);
+    atomic_inc(&__reader_cnt);
+
+    mutex_unlock(&wait_mutex);
+    mutex_unlock(&acquired_mutex);
+    return 0;
+};  /* 0 <= degree < 360 , 0 < range < 180 */
+asmlinkage long rotlock_write(int degree, int range){
+
+    if(!(degree>=0 && degree<360)||!(range>0 && range<180 )) return -1;
+    long st = (degree - range + 360) % 360;
+    long ed = (degree + range) % 360;
+    //들어갈수있으면 보내고
+    //재우고
+    node_t* new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    new_nodes->range->st = st;
+    new_nodes->range->ed = ed;
+    new_nodes->rw = 1;
+    mutex_lock(&wait_mutex);
+    mutex_lock(&acquired_mutex);
+    node_t* curr, nxt;
+    int isok = 0;
+    int reader_cnt, writer_cnt;
+    while(1) {
+        isok=0;
+        list_for_each_entry_safe(curr, nxt, &head_acquired,nodes){
+            if(isrange(curr_degree, curr->range->st,curr->range->ed)){
+                isok = 1;
+                break;
+            }
+        }
+        if(isok == 0){
+            list_for_each_entry_safe(curr,nxt, &head_wait, nodes){
+                if(curr == new_nodes){
+                    break;
+                }
+                isok = 1;
+                break;
+            }
+        }
+        reader_cnt = atomic_read(&__reader_cnt);
+        writer_cnt = atomic_read(&__writer_cnt);
+        if(reader_cnt || writer_cnt || !isrange(curr_degree, st, ed)){
+            isok = 1;
+        }
+        if(isok == 0) break;
+        mutex_unlock(&wait_mutex);
+        mutex_unlock(&acquired_mutex);
+        gosleep(new_nodes);
+        mutex_lock(&wait_mutex);
+        mutex_lock(&acquired_mutex); 
+    }
+    list_move_tail(new_nodes, head_acquired);
+    atomic_inc(&__writer_cnt);
+
+>>>>>>> 8584bfd1ea060da1d7402fe601fc83c99c1096ef
     mutex_unlock(&wait_mutex);
     mutex_unlock(&acquired_mutex);
     return 0;
