@@ -7,8 +7,8 @@ typedef struct range range_t;
 struct node{
     int rw;// 0: reader 1: writer
     // int wait_state;
-    wait_queue_head* wq_head;
-    wait_queue_entry* wq_entry;
+    wait_queue_head_t* wq_head;
+    wait_queue_entry_t* wq_entry;
     range_t* range;
         // if ed < st:
         //    범위: st~360, 0~ed 
