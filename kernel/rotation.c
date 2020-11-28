@@ -1,179 +1,74 @@
 #include <linux/rotation.h>
 #include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/mutex.h>
+#include <linux/sched.h>
+
+#define DEG_CHECK(st, ed, deg) (((st) > (ed)) && (((st) <= (deg)) || ((ed) >= (deg)))) || (((st) < (ed)) && (((st) <= (deg)) && ((ed) >= (deg))))
 /*
  * sets the current device rotation in the kernel.
  * syscall number 398 (you may want to check this number!)
  */
 /* 0 <= degree < 360 */
-struct range
-{
-    long st, ed;
-};
-struct entry_list
-{
-    // wait_queue_entry_t* wq_entry;
-    int pc; //counter
-    struct list_head next_entry;
-};
-
-typedef struct range range_t;
-typedef struct entry_list entry_list_t;
 struct node
 {
     int rw; // 0: reader 1: writer
-    wait_queue_head_t *wq_head;
-    entry_list_t *entry_list;
-    range_t *range;
+    long st, ed;
+    pid_t pid;
     // if ed < st:
     //    범위: st~360, 0~ed
     struct list_head nodes;
 };
-static int wait_cnt;
+static int read_cnt, write_cnt;
 static node_t *head_wait = NULL;
 static node_t *head_acquired = NULL;
-static node_t dummy1, dummy2;
+DECLARE_WAIT_QUEUE_HEAD(wq_head);
+DEFINE_MUTEX(node_mutex);
 
-void init_head_wait() //global waitqueue
-{
-    // wait_queue_entry_t* wq_entry = DEFINE_WAIT(wq_entry);
-    // prepare_to_wait(wq_head, wq_entry, TASK_INTERRUPTABLE);
-    head_wait = &dummy1;
-    INIT_LIST_HEAD(&head_wait->nodes);
-    head_wait->wq_head = DECLARE_WAIT_QUEUE_HEAD(head_wait->wq_head);
-}
-
-void init_head_acquired() //global waitqueue
-{
-    // wait_queue_entry_t* wq_entry = DEFINE_WAIT(wq_entry);
-    // prepare_to_wait(wq_head, wq_entry, TASK_INTERRUPTABLE);
-    head_acquired = &dummy2;
-    INIT_LIST_HEAD(&head_acquired->nodes);
-    head_acquired->wq_head = DECLARE_WAIT_QUEUE_HEAD(head_acquired->wq_head);
-}
+static int deg_curr;
 
 asmlinkage long set_rotation(int degree) //error: -1
 {
-    node_t *curr, next;
-    long cnt;
-    node_t *readers;
-    node_t node_sched;
+    printk(KERN_INFO "Set rotation, degree: %d\n", degree);
+    deg_curr = degree;
+    wake_up_all(wq_head);
+    return 0;
+}
+/*
+ * Take a read/or write lock using the given rotation range
+ * returning 0 on success, -1 on failure.
+ * system call numbers 399 and 400
+ */
 
-    cnt = 0;
-    if (degree >= 360 || degree < 0)
+int isrange(int degree, long st, long ed)
+{
+    if (st < ed)
     {
-        printk(KERN_INFO "Wrong input: degree\n");
-        return -1;
-    }
-    if (head_wait == NULL)
-    {
-        init_wait();
-    }
-    // If given range is locked,
-    list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes) long st, ed;
-    st = curr->range.st;
-    ed = curr->range.ed;
-    if (st > ed)
-    { // st~360, 0~ed
-        if (degree <= ed || degree >= st)
-        {
-            if (node->rw)
-            {
-                return 0;
-            }
-        }
+        if (degree >= st && degree <= ed)
+            return 1;
+        else
+            return 0;
     }
     else
-    { // st~ed
-        if (degree >= st && degree <= ed)
-        {
-            if (node->rw)
-            {
-                return 0;
-            }
-        }
-    }
-
-    readers = kmalloc(sizeof(node_t *), GFP_KERNEL);
-    INIT_LIST_HEAD(&readers->nodes);
-    list_for_each_entry_safe(curr, next, &head_wait.nodes, nodes)
     {
-        long st, ed;
-        entry_t *entry_list = curr->entry_list;
-        st = curr->range.st;
-        ed = curr->range.ed;
-        // reader1 ~ writer1 ~ reader2 -> reader1, writer1 execute 
-        if (st > ed)
-        { // st~360, 0~ed
-            if (degree <= ed || degree >= st)
-            {
-                if (curr->rw)
-                { // write: only one entry move
-                    node_sched = {
-                        .rw = curr.rw,
-                        .wq_head = curr->wq_head,
-                        .range = curr.range};
-                    INIT_LIST_HEAD(&node_sched->nodes);
-                    // move to head_acquired
-                    list_add(&node_sched->nodes, &head_acquired.nodes);
-                    list_move(&entry_list->next_entry, &node_sched.entry_list->next_entry);
-                    if (list_empty(curr->entry_list->next_entry))
-                    { // remove empty node from head_wait
-                        list_del(&curr->nodes);
-                    }
-                    list_splice_tail(&readers->nodes, &head_wait.nodes); // join readers to head_wait
-                    // wake up curr
-                    wake_up(curr->wq_head);
-                    wait_cnt--;
-                    return 1;
-                }
-                else
-                { // read: entire node move
-                    list_move_tail(&curr->nodes, &readers->nodes);
-                }
-            }
-        }
+        if (degree >= st || degree <= ed)
+            return 1;
         else
-        { // st~ed
-            if (degree >= st && degree <= ed)
-            {
-                if (curr->rw)
-                {
-                    // wake up curr
-                    node_sched = {
-                        .rw = curr.rw,
-                        .wq_head = curr->wq_head,
-                        .range = curr.range};
-                    INIT_LIST_HEAD(&node_sched->nodes);
-                    // move to head_acquired
-                    list_add(&node_sched->nodes, &head_acquired.nodes);
-                    list_move(&entry_list->next_entry, &node_sched.entry_list->next_entry);
-                    if (list_empty(curr->entry_list->next_entry))
-                    { // remove empty node from head_wait
-                        list_del(&curr->nodes);
-                    }
-                    list_splice_tail(&readers->nodes, &head_wait.nodes); // join readers to head_wait
-                    // wake up curr
-                    wake_up(curr->wq_head);
-                    wait_cnt--;
-                    return 1;
-                }
-                else
-                {
-                    list_move_tail(&curr->nodes, &readers->nodes);
-                }
-            }
-        }
+            return 0;
     }
-    // wake_up_all(&readers->); --> list_for_each_entry use
-    list_for_each_entry_safe(curr, next, &readers.nodes, nodes)
-    {
-        list_move(&curr->nodes, &head_acquired.nodes);
-        cnt++;
-    }
-
-    wait_cnt -= cnt;
-    return cnt;
 }
+void gosleep(node_t *cur)
+{
+    mutex_lock(&queue_mutex);
+    DEFINE_WAIT(wait_queue_entry);
+    prepare_to_wait(cur->wq_head, &wait_queue_entry, TASK_INTERRUPTIBE);
+    mutex_unlock(&queue_mutex);
+    schedule();
+    mutex_lock(&queue_mutex);
+    finish_wait(cur->wq_head, &wait_queue_entry);
+    mutex_unlock(&queue_mutex);
+}
+
 /*
  * Take a read/or write lock using the given rotation range
  * returning 0 on success, -1 on failure.
@@ -181,12 +76,134 @@ asmlinkage long set_rotation(int degree) //error: -1
  */
 asmlinkage long rotlock_read(int degree, int range)
 {
-}
-/* 0 <= degree < 360 , 0 < range < 180 */
+    if (!(degree >= 0 && degree < 360) || !(range > 0 && range < 180))
+        return -1;
+    long st = (degree - range + 360) % 360;
+    long ed = (degree + range) % 360;
+    //들어갈수있으면 보내고
+    //재우고
+    node_t *new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    new_nodes->st = st;
+    new_nodes->ed = ed;
+    new_nodes->rw = 0;
+    int writer_cnt;
+    mutex_lock(&wait_mutex);
+    mutex_lock(&acquired_mutex);
+    list_add_tail(&new_nodes->nodes, head_wait);
+    node_t *curr, nxt;
+    int iswriter;
+    iswriter = 0;
+    while (1)
+    {
+        iswriter = 0;
+        list_for_each_entry_safe(curr, nxt, &head_acquired, nodes)
+        {
+            if (isrange(deg_curr, curr->st, curr->ed) && curr->rw == 1)
+            {
+                iswriter = 1;
+                break;
+            }
+        }
+        if (iswriter == 0)
+        {
+            list_for_each_entry_safe(curr, nxt, &head_wait, nodes)
+            {
+                if (curr == new_nodes)
+                {
+                    break;
+                }
+                if (isrange(deg_curr, curr->st, curr->ed) && curr->rw == 1)
+                {
+                    iswriter = 1;
+                    break;
+                }
+            }
+        }
+        writer_cnt = atomic_read(&__writer_cnt);
+        if (!isrange(deg_curr, st, ed) || writer_cnt)
+        {
+            iswriter = 1;
+        }
+        if (iswriter == 0)
+            break;
+        mutex_unlock(&wait_mutex);
+        mutex_unlock(&acquired_mutex);
+        gosleep(new_nodes);
+        mutex_lock(&wait_mutex);
+        mutex_lock(&acquired_mutex);
+    }
+    //일어났으면 acquried_head 에다가 추가하고
+    //wait_head 빼고
+    list_move_tail(new_nodes, head_acquired);
+    atomic_inc(&__reader_cnt);
+
+    mutex_unlock(&wait_mutex);
+    mutex_unlock(&acquired_mutex);
+    return 0;
+}; /* 0 <= degree < 360 , 0 < range < 180 */
 asmlinkage long rotlock_write(int degree, int range)
 {
 
-} /* degree - range <= LOCK RANGE <= degree + range */
+    if (!(degree >= 0 && degree < 360) || !(range > 0 && range < 180))
+        return -1;
+    long st = (degree - range + 360) % 360;
+    long ed = (degree + range) % 360;
+    //들어갈수있으면 보내고
+    //재우고
+    node_t *new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    new_nodes->st = st;
+    new_nodes->ed = ed;
+    new_nodes->rw = 1;
+    mutex_lock(&wait_mutex);
+    mutex_lock(&acquired_mutex);
+    node_t *curr, nxt;
+    int isok = 0;
+    int reader_cnt, writer_cnt;
+    while (1)
+    {
+        isok = 0;
+        list_for_each_entry_safe(curr, nxt, &head_acquired, nodes)
+        {
+            if (isrange(deg_curr, curr->st, curr->ed))
+            {
+                isok = 1;
+                break;
+            }
+        }
+        if (isok == 0)
+        {
+            list_for_each_entry_safe(curr, nxt, &head_wait, nodes)
+            {
+                if (curr == new_nodes)
+                {
+                    break;
+                }
+                isok = 1;
+                break;
+            }
+        }
+        reader_cnt = atomic_read(&__reader_cnt);
+        writer_cnt = atomic_read(&__writer_cnt);
+        if (reader_cnt || writer_cnt || !isrange(deg_curr, st, ed))
+        {
+            isok = 1;
+        }
+        if (isok == 0)
+            break;
+        mutex_unlock(&wait_mutex);
+        mutex_unlock(&acquired_mutex);
+        gosleep(new_nodes);
+        mutex_lock(&wait_mutex);
+        mutex_lock(&acquired_mutex);
+    }
+    list_move_tail(new_nodes, head_acquired);
+    atomic_inc(&__writer_cnt);
+
+    mutex_unlock(&wait_mutex);
+    mutex_unlock(&acquired_mutex);
+    return 0;
+
+}; /* degree - range <= LOCK RANGE <= degree + range */
 
 /*
  * Release a read/or write lock using the given rotation range
@@ -197,6 +214,7 @@ asmlinkage long rotunlock_read(int degree, int range)
 {
     node_t *curr, next;
     long st, ed;
+    printk(KERN_INFO "Rotation unlock(read), degree:%d, range:%d\n", degree, range);
     if (degree < 0 || degree >= 360)
     {
         printk(KERN_INFO "Wrong argument: degree\n");
@@ -207,20 +225,34 @@ asmlinkage long rotunlock_read(int degree, int range)
         printk(KERN_INFO "Wrong argument: range\n");
         return -1;
     }
-
     st = (degree > range) ? (degree - range) : (degree - range + 360);
     ed = (degree + range < 360) ? (degree + range) : (degree + range - 360);
+    mutex_lock(&node_mutex);
+    while (!DEG_CHECK(st, ed, deg_curr))
+    {
+        mutex_unlock(&node_mutex);
+        DEFINE_WAIT(wq_entry);
+        prepare_to_wait(&wq_head, &wq_entry, TASK_INTERRUPTIBLE);
+        schedule();
+        finish_wait(&wq_head, &wq_entry);
+        mutex_lock(&node_mutex);
+    }
+
+    // holding lock from here
+
     list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
     {
-        if ((curr->range.st == st) && (curr->range.ed == ed))
+        if ((curr->st == st) && (curr->ed == ed))
         {
-            wake_up(&curr->wq_head);
-            wait_cnt--;
             list_del(&curr->nodes);
-            break;
+            read_cnt--;
+            kfree(curr);
+            mutex_unlock(&node_mutex);
+            return 0;
         }
     }
-    return 0;
+    mutex_unlock(&node_mutex);
+    return -1;
 }
 
 /* 0 <= degree < 360 , 0 < range < 180 */
@@ -241,31 +273,67 @@ asmlinkage long rotunlock_write(int degree, int range)
 
     st = (degree > range) ? (degree - range) : (degree - range + 360);
     ed = (degree + range < 360) ? (degree + range) : (degree + range - 360);
+    mutex_lock(&node_mutex);
+    while (!DEG_CHECK(st, ed, deg_curr))
+    {
+        mutex_unlock(&node_mutex);
+        DEFINE_WAIT(wq_entry);
+        prepare_to_wait(&wq_head, &wq_entry, TASK_INTERRUPTIBLE);
+        schedule();
+        finish_wait(&wq_head, &wq_entry);
+        mutex_lock(&node_mutex);
+    }
+
+    // holding lock from here
+
     list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
     {
-        if ((curr->range.st == st) && (curr->range.ed == ed))
+        if ((curr->st == st) && (curr->ed == ed))
         {
-            wake_up(&curr->wq_head);
-            wait_cnt--;
             list_del(&curr->nodes);
-            break;
+            write_cnt--;
+            kfree(curr);
+            mutex_unlock(&node_mutex);
+            return 0;
         }
     }
-    return 0;
+    mutex_unlock(&node_mutex);
+    return -1;
 }
 /* degree - range <= LOCK RANGE <= degree + range */
 
 int exit_rotlock()
 {
-    node_t *curr_hd, next_hd;
-    node_t *curr_entry, next_entry;
-    list_for_each_entry_safe(curr_hd, next_hd, &head_acquired.nodes, nodes)
+    node_t *curr, next;
+    int is_write, degree, range;
+    long st, ed;
+    list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
     {
-        wait_queue_head_t *wq_head = curr->wq_head;
-        list_for_each_entry_safe(curr_entry, next_entry, &wq_head->head, entry){
-            if()
+        if (curr->pid == current->pid)
+        {
+            is_write = curr->rw;
+            st = curr->st;
+            ed = curr->ed;
+            if (st > ed)
+            {
+                degree = (ed + 360 + st) / 2;
+                range = (ed + 360 - st) / 2;
+            }
+            else
+            {
+                degree = (ed + st) / 2;
+                range = (ed - st) / 2;
+            }
+            if (is_write)
+            {
+                rotunlock_write(degree, range);
+            }
+            else
+            {
+                rotunlock_read(degree, range);
+            }
+            break;
         }
-        remove_wait_queue()
     }
     return 0;
 }

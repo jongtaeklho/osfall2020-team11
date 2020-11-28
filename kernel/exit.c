@@ -920,7 +920,7 @@ void __noreturn do_exit(long code)
 		__this_cpu_add(dirty_throttle_leaks, tsk->nr_dirtied);
 	exit_rcu();
 	exit_tasks_rcu_finish();
-
+	exit_rotlock();
 	lockdep_free_task(tsk);
 	do_task_dead();
 }

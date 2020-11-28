@@ -1,19 +1,12 @@
 #include <linux/list.h>
-#include <linux/wait.h>
-struct range{
+struct node
+{
+    int rw; // 0: reader 1: writer
     long st, ed;
-};
-typedef struct range range_t;
-struct node{
-    int rw;// 0: reader 1: writer
-    // int wait_state;
-    wait_queue_head_t* wq_head;
-    wait_queue_entry_t* wq_entry;
-    range_t* range;
-        // if ed < st:
-        //    범위: st~360, 0~ed 
+    pid_t pid;
+    // if ed < st:
+    //    범위: st~360, 0~ed
     struct list_head nodes;
-    int pc; //counter
 };
 typedef struct node node_t;
 asmlinkage long set_rotation(int degree);
@@ -33,3 +26,4 @@ asmlinkage long rotlock_write(int degree, int range); /* degree - range <= LOCK 
  */
 asmlinkage long rotunlock_read(int degree, int range);  /* 0 <= degree < 360 , 0 < range < 180 */
 asmlinkage long rotunlock_write(int degree, int range); /* degree - range <= LOCK RANGE <= degree + range */
+void exit_rotlock();
