@@ -49,14 +49,14 @@ struct Node
 `set_rotation()`은 두 변수를 동적 할당하고, 주어진 `degree`를 static 변수인 `deg_curr`에 저장해 `rotunlock`, `rotlock` 관련 시스템 콜을 실행할 준비를 한다.  `set_rotation()`은 마지막으로 `wake_up_all()` 함수를 통해 `wq_rot`에 들어있는 모든 프로세스를 깨워 각 프로세스의 `rotlock` 및 `rotunlock` 함수가 실행 순서를 조절하도록 한다. 반환값은 따로 사용할 필요가 없어 에러일 때 -1, 정상적으로 실행되었을 때 0을 반환하도록 하였다.  
 3. `long rotlock_read(int degree, int range)`
 `rotlock_read()`를 실행하면 우선 현재 프로세스를 뜻하는 새로운 노드를 만든다. 이 노드를 `head_wait`에 연결하여 프로세스를 대기 상태로 간주하고, 해당 프로세스가 지금 실행될 수 있는지 확인한다. 확인 과정은 다음과 같이 정해졌으며, writer starvation이 일어나지 않도록 구현되었다. 전체 과정은 `mutex_lock()` 안에 들어있어서 race condition의 영향을 받지 않는다.  
-    + 현재 실행 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 writer가 없는지 확인
-    + 위의 조건을 만족하는 프로세스가 없으면, 자신 이전에 들어온 대기 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 writer가 없는지 확인
-    + 위의 조건을 만족하는 프로세스가 없으면, 자신의 각도 범위가 `degree`를 포함하는지 확인
+    + 현재 실행 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 writer가 없는지 확인  
+    + 위의 조건을 만족하는 프로세스가 없으면, 자신 이전에 들어온 대기 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 writer가 없는지 확인  
+    + 위의 조건을 만족하는 프로세스가 없으면, 자신의 각도 범위가 `degree`를 포함하는지 확인  
 이 과정을 모두 통과한 프로세스의 노드는 `head_acquired`의 tail으로 옮겨간다. 그 뒤, 해당 프로세스가 실행된다. 이 과정을 통과하지 못한 프로세스는 wait queue에 다시 들어가 `wake_up_all()`이 실행될 때까지 기다린다.  
 4. `long rotlock_write(int degree, int range)`
 `rotlock_write()`는 `rotlock_read()`와 유사하다. 다만, writer는 한 번에 하나만 실행될 수 있고, 프로세스의 실행 여부를 확인하는 과정만 다르다. 확인 과정은 다음과 같다.
-    + 현재 실행 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 프로세스(reader/writer 모두 포함)가 없는지 확인
-    + 위의 조건을 만족하는 프로세스가 없으면, 자신 이전에 들어온 대기 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 프로세스(reader/writer 모두 포함)가 없는지 확인
+    + 현재 실행 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 프로세스(reader/writer 모두 포함)가 없는지 확인  
+    + 위의 조건을 만족하는 프로세스가 없으면, 자신 이전에 들어온 대기 중인 프로세스 중 각도 범위 안에 `degree`를 포함하는 프로세스(reader/writer 모두 포함)가 없는지 확인  
     + 위의 조건을 만족하는 프로세스가 없으면, 자신의 각도 범위가 `degree`를 포함하는지 확인  
 5. `long rotunlock_read(int degree, int range)`
 `rotunlock_read()`는 `head_acquired`에 있는 실행 중인 프로세스들을 확인하여, 해당 프로세스의 각도 범위 및 reader/writer 종류가 `rotunlock_read()`을 부른 자신의 각도 범위 및 종류와 정확히 일치하는지 확인한다. 만약 정확히 일치하는 노드를 찾는다면 해당 노드를 지우고, 0을 반환한다. 그러한 노드가 없다면 아무 것도 하지 않고 -1을 반환한다.   
