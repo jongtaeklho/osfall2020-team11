@@ -20,16 +20,23 @@ int main(int argc, char *argv[])
     {
         if (syscall(SYS_ROTLOCK_WRITE, 90, 90) == -1)
         {
-            printf("degree is wrong\n");
-            return 0;
+            printf("lock_write is wrong\n");
+            return -1;
         }
-        fp = fopen("integer", 'w');
+        fp = fopen("integer", "w");
+        if(fp == NULL){
+            printf("Failed to open integer.\n");
+            return -1;
+        }
         fprintf(fp, "%d", num);
         printf("selector: %d\n", num);
         fclose(fp);
         num++;
         if (syscall(SYS_ROTUNLOCK_WRITE, 90, 90) == -1)
         {
-            printf("unlock is wrong\n");
-            return 0;
+            printf("unlock_write is wrong\n");
+            return -1;
         }
+    }
+    return 0;
+}

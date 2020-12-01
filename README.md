@@ -20,19 +20,18 @@ the problems which may result by upgrading your kernel.
 ```
 
 # How to Build this Kernel
-주어진 tizen 커널에 다음과 같은 과정을 거쳐 새로운 system call인 sys_ptree를 등록할 수 있다. 
+본 프로젝트는 set_rotation, rotlock_read, rotlock_write, rotunlock_read, rotunlock_write 등 5개의 시스템 콜을 구현한다. 주어진 tizen 커널에 다음과 같은 과정을 거쳐 새로운 system call를 등록한다. 
 1. syscall 번호 등록
-    - 모든 syscall은 syscall table에서 관리한다. syscall이 작동하기 위해선 이 table의 빈 번호에 새로 등록할 syscall을 할당해야한다.
-    - 이 커널은 aarch64이므로 `arch/arm64/include/asm/unistd32.h`, `include/uapi/asm-generic/unistd.h`에서 398번을 할당한다. 
-    - `include/uapi/asm-generic/unistd.h`, `arch/arm64/include/asm/unistd.h` 등의 최대 syscall 범위를 398보다 큰 숫자(예:399)로 바꿔 398번 syscall을 사용할 수 있게 한다.
-2. `include/linux/prinfo.h` 헤더 파일에 prinfo 구조체를 선언해준다.
-3. `include/linux/syscalls.h` 헤더 파일에 asmlinkage int sys_ptree()를 선언한다.
-4. `~/kernel/ptree.c`에 sys_ptree 함수를 구현한다.
-5. 커널 Makefile(`kernel/Makefile`)에 `obj-y +=ptree.o` 를 추가해 컴파일될 수 있도록 한다.
+    - `arch/arm64/include/asm/unistd32.h`, `include/uapi/asm-generic/unistd.h`에서 398~402번을 할당한다. 
+    - `include/uapi/asm-generic/unistd.h`, `arch/arm64/include/asm/unistd.h` 등의 최대 syscall 범위를 402보다 큰 숫자(예:404)로 바꿔 새로 만든 시스템 콜을 사용할 수 있게 한다.
+2. `include/linux/prinfo.h` 헤더 파일에 range descriptor 역할을 하는 Node 구조체를 선언한다.
+3. `include/linux/syscalls.h` 헤더 파일에 asmlinkage를 붙여 각 함수를 선언한다.
+4. `~/kernel/rotation.c`에 sys_ptree 함수를 구현한다.
+5. 커널 Makefile(`kernel/Makefile`)에 `obj-y +=rotation.o` 를 추가해 컴파일될 수 있도록 한다.
 6. `./build-rpi3-arm64.sh`을 실행하여 변경된 커널을 컴파일한다.
 # Design & Implementation
-1. `int sys_ptree(struct prinfo *buf, int *nr)`
-`sys_ptree()`을 실행하면 우선 error 상황을 확인한다. `buf` 또는 `nr` 포인터가 `NULL`을 가리키거나, entry 개수가 1 미만인 등 함수 argument에 문제가 있다면 `-EINVAL`을 반환한다. access_ok를 통해 `nr`, `buf`를 확인하여 access 불가능할 경우 `-EFAULT`를 반환한다.
+1. `long set_rotation(int degree)`
+`set_rotation()`을 실행하면 우선 error 상황을 확인한다. `buf` 또는 `nr` 포인터가 `NULL`을 가리키거나, entry 개수가 1 미만인 등 함수 argument에 문제가 있다면 `-EINVAL`을 반환한다. access_ok를 통해 `nr`, `buf`를 확인하여 access 불가능할 경우 `-EFAULT`를 반환한다.
 커널 프로그램에서 user memory space에 계속 접근하는 것은 커널 패닉을 일으킬 수 있으므로, 입력된 `nr` 값을 `nr_max`에 재할당한다. 이제 프로세스 트리를 만들 준비가 끝났으면 `process_tree_traversal()` 함수를 실행하여 preorder로 각 프로세스 정보를 확인하고 `process_info`에 저장한다. 이 과정에서 실행 중인 프로세스가 바뀌는 것을 막기 위해 `read_lock(&tasklist_lock)`을 걸어놓는다. 이 전체 과정이 끝나면 `copy_to_user`를 통해 트리 탐색 결과를 `buf`에, 탐색한 프로세스 개수를 `nr`에 복사한다. 그 뒤, 모든 실행 중인 프로세스 수를 반환한다. `buf`에 포함되지 않은 프로세스도 ptree 실행 당시 실행 중이었다면 반환값에 포함한다.
 2. `void process_tree_traversal(struct prinfo *process_infos, struct task_struct *task, int max_cnt, int *curr_cnt, int* true_cnt)`
 `process_infos`는 프로세스 정보를 담아둘 struct 배열, `task`는 현재 확인 중인 프로세스의 task_struct, `max_cnt`는 `process_infos`에 담을 프로세스 개수의 상한, `curr_cnt`는 프로세스 iteration을 위한 커서, `true_cnt`는 모든 실행 중인 프로세스 수를 뜻한다.

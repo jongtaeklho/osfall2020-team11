@@ -68,7 +68,6 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
-#include <linux/rotation.h>
 
 static void __unhash_process(struct task_struct *p, bool group_dead)
 {

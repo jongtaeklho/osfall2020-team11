@@ -1,11 +1,10 @@
 #include <linux/kernel.h>
 #include <linux/rotation.h>
-#include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 
-#define DEG_CHECK(st, ed, deg) (((st) > (ed)) && (((st) <= (deg)) || ((ed) >= (deg)))) || (((st) < (ed)) && (((st) <= (deg)) && ((ed) >= (deg))))
+#define DEG_CHECK(st, ed, deg) ((((st) > (ed)) && (((st) <= (deg)) || ((ed) >= (deg)))) || (((st) < (ed)) && (((st) <= (deg)) && ((ed) >= (deg)))))
 /*
  * sets the current device rotation in the kernel.
  * syscall number 398 (you may want to check this number!)
@@ -13,24 +12,48 @@
 /* 0 <= degree < 360 */
 
 // static int reader_cnt, writer_cnt;
+static DECLARE_WAIT_QUEUE_HEAD(wq_rot);
+// static wait_queue_head_t *wq_rot = NULL;
 static node_t *head_wait = NULL;
 static node_t *head_acquired = NULL;
-DECLARE_WAIT_QUEUE_HEAD(wq_head);
-DEFINE_MUTEX(node_mutex);
 
 atomic_t reader_cnt = ATOMIC_INIT(0);
 atomic_t writer_cnt = ATOMIC_INIT(0);
 DEFINE_MUTEX(wait_mutex);
 DEFINE_MUTEX(acquired_mutex);
-DEFINE_MUTEX(queue_mutex);
+DEFINE_MUTEX(list_mutex);
+DEFINE_MUTEX(wq_mutex);
 
 static int deg_curr;
 
 asmlinkage long set_rotation(int degree) //error: -1
 {
+    if (head_wait == NULL)
+    {
+        // printk(KERN_ALERT "Initiate head_wait.\n");
+        head_wait = kmalloc(sizeof(node_t), GFP_KERNEL);
+        if (head_wait == NULL)
+        {
+            printk(KERN_ALERT "failed to allocate head_wait.\n");
+            return -1;
+        }
+        head_wait->wq_head = &wq_rot;
+        INIT_LIST_HEAD(&head_wait->nodes);
+    }
+    if (head_acquired == NULL)
+    {
+        // printk(KERN_ALERT "Initiate head_acquired.\n");
+        head_acquired = kmalloc(sizeof(node_t), GFP_KERNEL);
+        if (head_acquired == NULL)
+        {
+            printk(KERN_ALERT "failed to allocate head_acquired.\n");
+            return -1;
+        }
+        INIT_LIST_HEAD(&head_acquired->nodes);
+    }
     printk(KERN_INFO "Set rotation, degree: %d\n", degree);
     deg_curr = degree;
-    wake_up_all(queue_mutex);
+    wake_up_all(&wq_rot);
     return 0;
 }
 /*
@@ -39,33 +62,16 @@ asmlinkage long set_rotation(int degree) //error: -1
  * system call numbers 399 and 400
  */
 
-int isrange(int degree, long st, long ed)
+void gosleep(wait_queue_head_t *wq_head)
 {
-    if (st < ed)
-    {
-        if (degree >= st && degree <= ed)
-            return 1;
-        else
-            return 0;
-    }
-    else
-    {
-        if (degree >= st || degree <= ed)
-            return 1;
-        else
-            return 0;
-    }
-}
-void gosleep(node_t *cur)
-{
-    mutex_lock(&queue_mutex);
+    mutex_lock(&wq_mutex);
     DEFINE_WAIT(wait_queue_entry);
-    prepare_to_wait(cur->wq_head, &wait_queue_entry, TASK_INTERRUPTIBLE);
-    mutex_unlock(&queue_mutex);
+    prepare_to_wait(wq_head, &wait_queue_entry, TASK_INTERRUPTIBLE);
+    mutex_unlock(&wq_mutex);
     schedule();
-    mutex_lock(&queue_mutex);
-    finish_wait(cur->wq_head, &wait_queue_entry);
-    mutex_unlock(&queue_mutex);
+    mutex_lock(&wq_mutex);
+    finish_wait(wq_head, &wait_queue_entry);
+    mutex_unlock(&wq_mutex);
 }
 
 /*
@@ -77,129 +83,143 @@ asmlinkage long rotlock_read(int degree, int range)
 {
     if (!(degree >= 0 && degree < 360) || !(range > 0 && range < 180))
         return -1;
+    node_t *curr, *nxt;
+    int can_read;
     long st = (degree - range + 360) % 360;
     long ed = (degree + range) % 360;
     //들어갈수있으면 보내고
     //재우고
     node_t *new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    if (new_nodes == NULL)
+    {
+        printk(KERN_INFO "kmalloc error\n");
+        return -1;
+    }
     new_nodes->st = st;
     new_nodes->ed = ed;
     new_nodes->rw = 0;
-    int writer_cnt;
-    mutex_lock(&wait_mutex);
-    mutex_lock(&acquired_mutex);
-    list_add_tail(&new_nodes->nodes, head_wait);
-    node_t *curr, nxt;
-    int iswriter;
-    iswriter = 0;
+    new_nodes->pid = current->pid;
+    new_nodes->wq_head = head_wait->wq_head;
+    INIT_LIST_HEAD(&new_nodes->nodes);
+    int writer_cnt_curr;
+    // printk(KERN_INFO "lr9\n");
+    list_add_tail(&new_nodes->nodes, &head_wait->nodes);
+    mutex_lock(&list_mutex);
+    // printk(KERN_INFO "lr11\n");
+    // printk(KERN_INFO "lr12\n");
     while (1)
     {
-        iswriter = 0;
-        list_for_each_entry_safe(curr, nxt, &head_acquired, nodes)
+        can_read = 1;
+        list_for_each_entry_safe(curr, nxt, &head_acquired->nodes, nodes)
         {
-            if (isrange(deg_curr, curr->st, curr->ed) && curr->rw == 1)
+            if (DEG_CHECK(curr->st, curr->ed, deg_curr) && curr->rw)
             {
-                iswriter = 1;
+                can_read = 0;
                 break;
             }
         }
-        if (iswriter == 0)
+        if (can_read)
         {
-            list_for_each_entry_safe(curr, nxt, &head_wait, nodes)
+            list_for_each_entry_safe(curr, nxt, &head_wait->nodes, nodes)
             {
-                if (curr == new_nodes)
+                
+                if (DEG_CHECK(curr->st, curr->ed, deg_curr) && curr->rw)
                 {
+                    can_read = 0;
                     break;
-                }
-                if (isrange(deg_curr, curr->st, curr->ed) && curr->rw == 1)
-                {
-                    iswriter = 1;
+                } else if(curr == new_nodes){
                     break;
                 }
             }
         }
-        writer_cnt = atomic_read(&writer_cnt);
-        if (!isrange(deg_curr, st, ed) || writer_cnt)
+        // writer_cnt_curr = atomic_read(&writer_cnt);
+        if (!DEG_CHECK(st, ed, deg_curr))
         {
-            iswriter = 1;
+            can_read = 0;
         }
-        if (iswriter == 0)
+        if (can_read)
             break;
-        mutex_unlock(&wait_mutex);
-        mutex_unlock(&acquired_mutex);
-        gosleep(new_nodes);
-        mutex_lock(&wait_mutex);
-        mutex_lock(&acquired_mutex);
+        mutex_unlock(&list_mutex);
+        gosleep(head_wait->wq_head);
+        mutex_lock(&list_mutex);
     }
     //일어났으면 acquried_head 에다가 추가하고
     //wait_head 빼고
-    list_move_tail(new_nodes, head_acquired);
+    list_move_tail(&new_nodes->nodes, &head_acquired->nodes);
     atomic_inc(&reader_cnt);
-
-    mutex_unlock(&wait_mutex);
-    mutex_unlock(&acquired_mutex);
+    // printk(KERN_INFO "Hold Read Lock\n");
+    mutex_unlock(&list_mutex);
     return 0;
 }; /* 0 <= degree < 360 , 0 < range < 180 */
 asmlinkage long rotlock_write(int degree, int range)
 {
-
     if (!(degree >= 0 && degree < 360) || !(range > 0 && range < 180))
         return -1;
-    long st = (degree - range + 360) % 360;
-    long ed = (degree + range) % 360;
+    node_t *curr, *nxt;
+    int can_write;
+    int reader_cnt_curr, writer_cnt_curr;
+    long st, ed;
+    st = (degree - range + 360) % 360;
+    ed = (degree + range) % 360;
     //들어갈수있으면 보내고
     //재우고
     node_t *new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
+    if (new_nodes == NULL)
+    {
+        printk(KERN_INFO "kmalloc error\n");
+        return -1;
+    }
     new_nodes->st = st;
     new_nodes->ed = ed;
     new_nodes->rw = 1;
-    mutex_lock(&wait_mutex);
-    mutex_lock(&acquired_mutex);
-    node_t *curr, nxt;
-    int isok = 0;
-    int reader_cnt, writer_cnt;
+    new_nodes->pid = current->pid;
+    new_nodes->wq_head = head_wait->wq_head;
+    INIT_LIST_HEAD(&new_nodes->nodes);
+    list_add_tail(&new_nodes->nodes, &head_wait->nodes);
+    mutex_lock(&list_mutex);
     while (1)
     {
-        isok = 0;
-        list_for_each_entry_safe(curr, nxt, &head_acquired, nodes)
+        can_write = 1;
+        list_for_each_entry_safe(curr, nxt, &head_acquired->nodes, nodes)
         {
-            if (isrange(deg_curr, curr->st, curr->ed))
+            if (DEG_CHECK(curr->st, curr->ed, deg_curr))
             {
-                isok = 1;
+                can_write = 0;
                 break;
             }
         }
-        if (isok == 0)
+        if (can_write)
         {
-            list_for_each_entry_safe(curr, nxt, &head_wait, nodes)
+            list_for_each_entry_safe(curr, nxt, &head_wait->nodes, nodes)
             {
                 if (curr == new_nodes)
                 {
                     break;
                 }
-                isok = 1;
-                break;
+                if (DEG_CHECK(curr->st, curr->ed, deg_curr))
+                {
+                    can_write = 0;
+                    break;
+                }
             }
         }
-        reader_cnt = atomic_read(&reader_cnt);
-        writer_cnt = atomic_read(&writer_cnt);
-        if (reader_cnt || writer_cnt || !isrange(deg_curr, st, ed))
+        // reader_cnt_curr = atomic_read(&reader_cnt);
+        // writer_cnt_curr = atomic_read(&writer_cnt);
+        if (!DEG_CHECK(st, ed, deg_curr))
         {
-            isok = 1;
+            can_write = 0;
         }
-        if (isok == 0)
+        if (can_write)
             break;
-        mutex_unlock(&wait_mutex);
-        mutex_unlock(&acquired_mutex);
-        gosleep(new_nodes);
-        mutex_lock(&wait_mutex);
-        mutex_lock(&acquired_mutex);
+        mutex_unlock(&list_mutex);
+        gosleep(head_wait->wq_head);
+        mutex_lock(&list_mutex);
     }
-    list_move_tail(new_nodes, head_acquired);
+    list_move_tail(&new_nodes->nodes, &head_acquired->nodes);
     atomic_inc(&writer_cnt);
 
-    mutex_unlock(&wait_mutex);
-    mutex_unlock(&acquired_mutex);
+    // printk(KERN_INFO "Hold Write Lock\n");
+    mutex_unlock(&list_mutex);
     return 0;
 
 }; /* degree - range <= LOCK RANGE <= degree + range */
@@ -211,9 +231,8 @@ asmlinkage long rotlock_write(int degree, int range)
  */
 asmlinkage long rotunlock_read(int degree, int range)
 {
-    node_t *curr, next;
+    node_t *curr, *next;
     long st, ed;
-    printk(KERN_INFO "Rotation unlock(read), degree:%d, range:%d\n", degree, range);
     if (degree < 0 || degree >= 360)
     {
         printk(KERN_INFO "Wrong argument: degree\n");
@@ -224,40 +243,39 @@ asmlinkage long rotunlock_read(int degree, int range)
         printk(KERN_INFO "Wrong argument: range\n");
         return -1;
     }
-    st = (degree > range) ? (degree - range) : (degree - range + 360);
-    ed = (degree + range < 360) ? (degree + range) : (degree + range - 360);
-    mutex_lock(&node_mutex);
+    st = (degree - range + 360) % 360;
+    ed = (degree + range) % 360;
+    mutex_lock(&list_mutex);
     while (!DEG_CHECK(st, ed, deg_curr))
     {
-        mutex_unlock(&node_mutex);
-        DEFINE_WAIT(wq_entry);
-        prepare_to_wait(&wq_head, &wq_entry, TASK_INTERRUPTIBLE);
-        schedule();
-        finish_wait(&wq_head, &wq_entry);
-        mutex_lock(&node_mutex);
+        mutex_unlock(&list_mutex);
+        gosleep(head_wait->wq_head);
+        mutex_lock(&list_mutex);
     }
 
     // unlock from here
 
-    list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
+    list_for_each_entry_safe(curr, next, &head_acquired->nodes, nodes)
     {
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            reader_cnt--;
+            atomic_dec(&reader_cnt); // reader_cnt--;
             kfree(curr);
-            mutex_unlock(&node_mutex);
+            mutex_unlock(&list_mutex);
+            // printk(KERN_INFO "Release Read Lock\n");
             return 0;
         }
     }
-    mutex_unlock(&node_mutex);
+    // printk(KERN_INFO "Release Read Lock\n");
+    mutex_unlock(&list_mutex);
     return -1;
 }
 
 /* 0 <= degree < 360 , 0 < range < 180 */
 asmlinkage long rotunlock_write(int degree, int range)
 {
-    node_t *curr, next;
+    node_t *curr, *next;
     long st, ed;
     if (degree < 0 || degree >= 360)
     {
@@ -270,85 +288,96 @@ asmlinkage long rotunlock_write(int degree, int range)
         return -1;
     }
 
-    st = (degree > range) ? (degree - range) : (degree - range + 360);
-    ed = (degree + range < 360) ? (degree + range) : (degree + range - 360);
-    mutex_lock(&node_mutex);
+    st = (degree - range + 360) % 360;
+    ed = (degree + range) % 360;
+    mutex_lock(&list_mutex);
     while (!DEG_CHECK(st, ed, deg_curr))
     {
-        mutex_unlock(&node_mutex);
-        DEFINE_WAIT(wq_entry);
-        prepare_to_wait(&wq_head, &wq_entry, TASK_INTERRUPTIBLE);
-        schedule();
-        finish_wait(&wq_head, &wq_entry);
-        mutex_lock(&node_mutex);
+        mutex_unlock(&list_mutex);
+        gosleep(head_wait->wq_head);
+        mutex_lock(&list_mutex);
     }
 
     // unlock from here
 
-    list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
+    list_for_each_entry_safe(curr, next, &head_acquired->nodes, nodes)
     {
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            writer_cnt--;
+            atomic_dec(&writer_cnt); 
             kfree(curr);
-            mutex_unlock(&node_mutex);
+            // printk(KERN_INFO "Release Write Lock\n");
+            mutex_unlock(&list_mutex);
             return 0;
         }
     }
-    mutex_unlock(&node_mutex);
+    // printk(KERN_INFO "Release Write Lock\n");
+    mutex_unlock(&list_mutex);
     return -1;
 }
 /* degree - range <= LOCK RANGE <= degree + range */
 
 void exit_rotlock()
 {
-    node_t *curr, next;
+    node_t *curr, *next;
     int is_write, degree, range;
     long st, ed;
     // Unlock if acquired
-    list_for_each_entry_safe(curr, next, &head_acquired.nodes, nodes)
+    if (head_acquired != NULL)
     {
-        if (curr->pid == current->pid)
+        list_for_each_entry_safe(curr, next, &head_acquired->nodes, nodes)
         {
-            is_write = curr->rw;
-            st = curr->st;
-            ed = curr->ed;
-            degree = (ed + st + 360 * (st > ed)) / 2;
-            range = (ed - st + 360 * (st > ed)) / 2;
-            if (is_write)
+            if (curr->pid == current->pid)
             {
-                rotunlock_write(degree, range);
+                is_write = curr->rw;
+                st = curr->st;
+                ed = curr->ed;
+                degree = (ed + st + 360 * (st > ed)) / 2;
+                range = (ed - st + 360 * (st > ed)) / 2;
+                // printk(KERN_INFO "exit rotlock\n");
+                if (is_write)
+                {
+                    rotunlock_write(degree, range);
+                }
+                else
+                {
+                    rotunlock_read(degree, range);
+                }
+                return;
             }
-            else
-            {
-                rotunlock_read(degree, range);
-            }
-            return;
         }
     }
     // Remove if waiting
-    list_for_each_entry_safe(curr, next, &head_wait.nodes, nodes)
+    if (head_wait != NULL)
     {
-        if (curr->pid == current->pid)
+        list_for_each_entry_safe(curr, next, &head_wait->nodes, nodes)
         {
-            is_write = curr->rw;
-            st = curr->st;
-            ed = curr->ed;
-            degree = (ed + st + 360 * (st > ed)) / 2;
-            range = (ed - st + 360 * (st > ed)) / 2;
-            wait_queue_entry_t *curr_entry, next_entry;
-            list_for_each_entry_safe(curr_entry, next_entry, &curr->wq_head, entry){
-                struct task_struct *task = curr_entry->private;
-                if(task->pid == current->pid){
-                    remove_wait_queue(&curr->wq_head, curr_entry);
-                    list_del(&curr->nodes);
-                    if(curr->rw){
-                        wake_up_all(&curr->wq_head); // wake if precedecing write is gone
+            if (curr->pid == current->pid)
+            {
+                wait_queue_entry_t *curr_entry, *next_entry;
+                is_write = curr->rw;
+                st = curr->st;
+                ed = curr->ed;
+                degree = (ed + st + 360 * (st > ed)) / 2;
+                range = (ed - st + 360 * (st > ed)) / 2;
+                // printk(KERN_INFO "exit rotlock\n");
+                list_for_each_entry_safe(curr_entry, next_entry, &curr->wq_head->head, entry)
+                {
+                    struct task_struct *task = curr_entry->private;
+                    if (task->pid == current->pid)
+                    {
+                        remove_wait_queue(curr->wq_head, curr_entry);
+                        list_del(&curr->nodes);
+                        if (curr->rw)
+                        {
+                            wake_up_all(curr->wq_head); // wake if precedecing write is gone
+                        }
+                        kfree(curr);
                     }
                 }
+                return;
             }
-            return;
         }
     }
 }
