@@ -11,14 +11,10 @@
  */
 /* 0 <= degree < 360 */
 
-// static int reader_cnt, writer_cnt;
 static DECLARE_WAIT_QUEUE_HEAD(wq_rot);
-// static wait_queue_head_t *wq_rot = NULL;
 static node_t *head_wait = NULL;
 static node_t *head_acquired = NULL;
 
-atomic_t reader_cnt = ATOMIC_INIT(0);
-atomic_t writer_cnt = ATOMIC_INIT(0);
 DEFINE_MUTEX(wait_mutex);
 DEFINE_MUTEX(acquired_mutex);
 DEFINE_MUTEX(list_mutex);
@@ -87,8 +83,6 @@ asmlinkage long rotlock_read(int degree, int range)
     int can_read;
     long st = (degree - range + 360) % 360;
     long ed = (degree + range) % 360;
-    //들어갈수있으면 보내고
-    //재우고
     node_t *new_nodes = kmalloc(sizeof(node_t), GFP_KERNEL);
     if (new_nodes == NULL)
     {
@@ -101,12 +95,8 @@ asmlinkage long rotlock_read(int degree, int range)
     new_nodes->pid = current->pid;
     new_nodes->wq_head = head_wait->wq_head;
     INIT_LIST_HEAD(&new_nodes->nodes);
-    int writer_cnt_curr;
-    // printk(KERN_INFO "lr9\n");
     list_add_tail(&new_nodes->nodes, &head_wait->nodes);
     mutex_lock(&list_mutex);
-    // printk(KERN_INFO "lr11\n");
-    // printk(KERN_INFO "lr12\n");
     while (1)
     {
         can_read = 1;
@@ -132,7 +122,6 @@ asmlinkage long rotlock_read(int degree, int range)
                 }
             }
         }
-        // writer_cnt_curr = atomic_read(&writer_cnt);
         if (!DEG_CHECK(st, ed, deg_curr))
         {
             can_read = 0;
@@ -146,7 +135,6 @@ asmlinkage long rotlock_read(int degree, int range)
     //일어났으면 acquried_head 에다가 추가하고
     //wait_head 빼고
     list_move_tail(&new_nodes->nodes, &head_acquired->nodes);
-    atomic_inc(&reader_cnt);
     // printk(KERN_INFO "Hold Read Lock\n");
     mutex_unlock(&list_mutex);
     return 0;
@@ -157,7 +145,6 @@ asmlinkage long rotlock_write(int degree, int range)
         return -1;
     node_t *curr, *nxt;
     int can_write;
-    int reader_cnt_curr, writer_cnt_curr;
     long st, ed;
     st = (degree - range + 360) % 360;
     ed = (degree + range) % 360;
@@ -203,8 +190,6 @@ asmlinkage long rotlock_write(int degree, int range)
                 }
             }
         }
-        // reader_cnt_curr = atomic_read(&reader_cnt);
-        // writer_cnt_curr = atomic_read(&writer_cnt);
         if (!DEG_CHECK(st, ed, deg_curr))
         {
             can_write = 0;
@@ -216,7 +201,6 @@ asmlinkage long rotlock_write(int degree, int range)
         mutex_lock(&list_mutex);
     }
     list_move_tail(&new_nodes->nodes, &head_acquired->nodes);
-    atomic_inc(&writer_cnt);
 
     // printk(KERN_INFO "Hold Write Lock\n");
     mutex_unlock(&list_mutex);
@@ -260,7 +244,6 @@ asmlinkage long rotunlock_read(int degree, int range)
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            atomic_dec(&reader_cnt); // reader_cnt--;
             kfree(curr);
             mutex_unlock(&list_mutex);
             // printk(KERN_INFO "Release Read Lock\n");
@@ -305,7 +288,6 @@ asmlinkage long rotunlock_write(int degree, int range)
         if ((curr->st == st) && (curr->ed == ed))
         {
             list_del(&curr->nodes);
-            atomic_dec(&writer_cnt); 
             kfree(curr);
             // printk(KERN_INFO "Release Write Lock\n");
             mutex_unlock(&list_mutex);
