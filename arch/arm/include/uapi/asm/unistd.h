@@ -37,7 +37,4 @@
 #define __ARM_NR_usr32			(__ARM_NR_BASE+4)
 #define __ARM_NR_set_tls		(__ARM_NR_BASE+5)
 
-
-/* project 1 */
-#define __NR_myfunc      (__NR_SYSCALL_BASE+ #) 
 #endif /* _UAPI__ASM_ARM_UNISTD_H */

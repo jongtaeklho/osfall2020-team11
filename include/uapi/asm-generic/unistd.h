@@ -733,20 +733,8 @@ __SYSCALL(__NR_pkey_free,     sys_pkey_free)
 #define __NR_statx 291
 __SYSCALL(__NR_statx,     sys_statx)
 
-
-#define __NR_set_rotation 398
-__SYSCALL(__NR_set_rotation, set_rotation)
-#define __NR_rotlock_read 399
-__SYSCALL(__NR_rotlock_read, rotlock_read)
-#define __NR_rotlock_write 400
-__SYSCALL(__NR_rotlock_write, rotlock_write)
-#define __NR_rotunlock_read 401
-__SYSCALL(__NR_rotunlock_read, rotunlock_read)
-#define __NR_rotunlock_write 402
-__SYSCALL(__NR_rotunlock_write, rotunlock_write)
-
 #undef __NR_syscalls
-#define __NR_syscalls (__NR_rotunlock_write + 1)
+#define __NR_syscalls 292
 
 /*
  * All syscalls below here should go away really,

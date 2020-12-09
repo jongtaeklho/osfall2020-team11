@@ -18,7 +18,3 @@
 #define __ARCH_WANT_RENAMEAT
 
 #include <asm-generic/unistd.h>
-
-
-//#define __NR_ptree 398
-//__SYSCALL(__NR_ptree, sys_ptree)

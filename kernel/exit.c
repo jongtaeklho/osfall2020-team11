@@ -68,7 +68,6 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
-
 static void __unhash_process(struct task_struct *p, bool group_dead)
 {
 	nr_threads--;
@@ -761,7 +760,6 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
-
 void __noreturn do_exit(long code)
 {
 	struct task_struct *tsk = current;
@@ -919,7 +917,7 @@ void __noreturn do_exit(long code)
 		__this_cpu_add(dirty_throttle_leaks, tsk->nr_dirtied);
 	exit_rcu();
 	exit_tasks_rcu_finish();
-	exit_rotlock();
+
 	lockdep_free_task(tsk);
 	do_task_dead();
 }
