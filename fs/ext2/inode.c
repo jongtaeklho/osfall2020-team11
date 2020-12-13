@@ -1431,6 +1431,16 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 		ret = -ESTALE;
 		goto bad_inode;
 	}
+
+	/* os project 4 */
+	ei->i_lat_integer = le32_to_cpu(raw_inode->i_lat_integer);
+    ei->i_lat_fractional = le32_to_cpu(raw_inode->i_lat_fractional);
+	ei->i_lng_integer = le32_to_cpu(raw_inode->i_lng_integer);
+	ei->i_lng_fractional = le32_to_cpu(raw_inode->i_lng_fractional);
+	ei->i_accuracy = le32_to_cpu(raw_inode->i_accuracy);
+
+
+
 	inode->i_blocks = le32_to_cpu(raw_inode->i_blocks);
 	ei->i_flags = le32_to_cpu(raw_inode->i_flags);
 	ei->i_faddr = le32_to_cpu(raw_inode->i_faddr);
@@ -1559,6 +1569,13 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
 		raw_inode->i_uid_high = 0;
 		raw_inode->i_gid_high = 0;
 	}
+
+ 	raw_inode->i_lat_integer = cpu_to_le32(ei->i_lat_integer);
+	raw_inode->i_lat_fractional = cpu_to_le32(ei->i_lat_fractional);
+	raw_inode->i_lng_integer = cpu_to_le32(ei->i_lng_integer);
+	raw_inode->i_lng_fractional = cpu_to_le32(ei->i_lng_fractional);
+	raw_inode->i_accuracy = cpu_to_le32(ei->i_accuracy);
+
 	raw_inode->i_links_count = cpu_to_le16(inode->i_nlink);
 	raw_inode->i_size = cpu_to_le32(inode->i_size);
 	raw_inode->i_atime = cpu_to_le32(inode->i_atime.tv_sec);
@@ -1658,4 +1675,34 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 	mark_inode_dirty(inode);
 
 	return error;
+}
+
+
+int ext2_set_gps_location(struct inode *inode){
+	struct ext2_inode_info *ei = EXT2_I(inode);
+	if(curr_loc == NULL){
+		printk(KERN_ALERT "failure at ext2_set_gps_location: curr_loc not initialized\n");
+		return -1;
+	}
+	ei->i_lat_integer = (__le32)(curr_loc.lat_integer);
+	ei->i_lat_fractional = (__le32)(curr_loc.lat_fractional);
+	ei->i_lng_integer = (__le32)(curr_loc.lng_integer);
+	ei->i_lng_fractional = (__le32)(curr_loc.lng_fractional);
+	ei->i_accuracy = (__le32)(curr_loc.accuracy);
+	return 0;
+}
+int ext2_get_gps_location(struct inode *inode, struct gps_location *loc){
+	if(loc == NULL){
+        printk(KERN_ALERT "failure at ext2_get_gps_location: gpu_location not initialized\n");
+        return -1;
+    }
+	struct ext2_inode_info *ei = EXT2_I(inode);
+
+	loc->lat_integer = (int)(ei->i_lat_integer);
+	loc->lat_fractional = (int)(ei->i_lat_fractional);
+	loc->lng_integer = (int)(ei->i_lng_integer);
+	loc->lng_fractional = (int)(ei->i_lng_fractional);
+	loc->accuracy = (int)(ei->i_accuracy);
+
+	return 0;
 }

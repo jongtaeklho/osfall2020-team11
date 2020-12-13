@@ -16,6 +16,7 @@
 #include <linux/blockgroup_lock.h>
 #include <linux/percpu_counter.h>
 #include <linux/rbtree.h>
+#include <linux/gpu.h>
 
 /* XXX Here for now... not interested in restructing headers JUST now */
 
@@ -311,6 +312,17 @@ struct ext2_inode {
 	__le16	i_links_count;	/* Links count */
 	__le32	i_blocks;	/* Blocks count */
 	__le32	i_flags;	/* File flags */
+
+
+
+	__le32	i_lat_integer;
+	__le32	i_lat_fractional;
+	__le32	i_lng_integer;
+	__le32	i_lng_fractional;
+	__le32	i_accuracy;
+
+
+
 	union {
 		struct {
 			__le32  l_i_reserved1;
@@ -783,6 +795,12 @@ extern int ext2_setattr (struct dentry *, struct iattr *);
 extern void ext2_set_inode_flags(struct inode *inode);
 extern int ext2_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 		       u64 start, u64 len);
+/* proj4 on inode.c */
+extern int ext2_set_gps_location(struct inode *node);
+extern int ext2_get_gps_location(struct inode *, struct gps_location *);
+
+
+
 
 /* ioctl.c */
 extern long ext2_ioctl(struct file *, unsigned int, unsigned long);
@@ -799,6 +817,8 @@ void ext2_msg(struct super_block *, const char *, const char *, ...);
 extern void ext2_update_dynamic_rev (struct super_block *sb);
 extern void ext2_sync_super(struct super_block *sb, struct ext2_super_block *es,
 			    int wait);
+
+
 
 /*
  * Inodes and files operations
