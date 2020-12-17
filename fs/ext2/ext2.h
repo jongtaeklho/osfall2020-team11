@@ -16,7 +16,7 @@
 #include <linux/blockgroup_lock.h>
 #include <linux/percpu_counter.h>
 #include <linux/rbtree.h>
-#include <linux/gpu.h>
+#include <linux/gps.h>
 
 /* XXX Here for now... not interested in restructing headers JUST now */
 
@@ -315,11 +315,11 @@ struct ext2_inode {
 
 
 
-	__le32	i_lat_integer;
-	__le32	i_lat_fractional;
-	__le32	i_lng_integer;
-	__le32	i_lng_fractional;
-	__le32	i_accuracy;
+	__s32	i_lat_integer;
+	__s32	i_lat_fractional;
+	__s32	i_lng_integer;
+	__s32	i_lng_fractional;
+	__s32	i_accuracy;
 
 
 
@@ -668,6 +668,12 @@ struct ext2_mount_options {
  * second extended file system inode data in memory
  */
 struct ext2_inode_info {
+	__s32	i_lat_integer;
+	__s32	i_lat_fractional;
+	__s32	i_lng_integer;
+	__s32	i_lng_fractional;
+	__s32	i_accuracy;
+	
 	__le32	i_data[15];
 	__u32	i_flags;
 	__u32	i_faddr;
@@ -798,7 +804,7 @@ extern int ext2_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 /* proj4 on inode.c */
 extern int ext2_set_gps_location(struct inode *node);
 extern int ext2_get_gps_location(struct inode *, struct gps_location *);
-
+extern int ext2_check_permission(struct inode *inode, int mask);
 
 
 

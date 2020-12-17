@@ -1680,10 +1680,7 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 
 int ext2_set_gps_location(struct inode *inode){
 	struct ext2_inode_info *ei = EXT2_I(inode);
-	if(curr_loc == NULL){
-		printk(KERN_ALERT "failure at ext2_set_gps_location: curr_loc not initialized\n");
-		return -1;
-	}
+
 	ei->i_lat_integer = (__le32)(curr_loc.lat_integer);
 	ei->i_lat_fractional = (__le32)(curr_loc.lat_fractional);
 	ei->i_lng_integer = (__le32)(curr_loc.lng_integer);
@@ -1705,4 +1702,15 @@ int ext2_get_gps_location(struct inode *inode, struct gps_location *loc){
 	loc->accuracy = (int)(ei->i_accuracy);
 
 	return 0;
+}
+int ext2_check_permission(struct inode *inode, int mask){
+	int perm;
+	if(perm = inode_permission(inode, mask)){
+		return perm;
+	}
+
+	if(!is_accessible_loc(inode)){
+		return -EACCES;
+	}
+	return perm;
 }
