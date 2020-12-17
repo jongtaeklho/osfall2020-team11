@@ -1,8 +1,15 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+# Makefile for libblkid
+#
+# Copyright (C) 2001 Theodore Ts'o (tytso@mit.edu)
+#
+# This file can be redistributed under the terms of the
+# GNU Lesser General Public License
+
+srcdir = ../../e2fsprogs-1.45.6/lib/blkid
+top_srcdir = ../../e2fsprogs-1.45.6
+VPATH = ../../e2fsprogs-1.45.6/lib/blkid
+top_builddir = ../..
+my_dir = lib/blkid
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +345,233 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+all:: 
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+SMANPAGES=	libblkid.3
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+OBJS= cache.o dev.o devname.o devno.o getsize.o llseek.o probe.o \
+ read.o resolve.o save.o tag.o version.o 
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+SRCS= $(srcdir)/cache.c $(srcdir)/dev.c $(srcdir)/devname.c $(srcdir)/devno.c \
+ $(srcdir)/getsize.c $(srcdir)/llseek.c $(srcdir)/probe.c \
+ $(srcdir)/read.c $(srcdir)/resolve.c $(srcdir)/save.c $(srcdir)/tag.c \
+ $(srcdir)/version.c
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+HFILES_IN=	blkid.h blkid_types.h
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+LIBRARY= libblkid
+LIBDIR= blkid
 
-TAR=tar
+ELF_VERSION = 1.0
+ELF_SO_VERSION = 1
+ELF_IMAGE = libblkid
+ELF_MYDIR = blkid
+ELF_INSTALL_DIR = $(root_libdir)
+ELF_OTHER_LIBS = -luuid
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+BSDLIB_VERSION = 2.0
+BSDLIB_IMAGE = libblkid
+BSDLIB_MYDIR = blkid
+BSDLIB_INSTALL_DIR = $(root_libdir)
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+all:: subdirs $(LIBRARY).a
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+install-shlibs-strip::
 
-rpm:
-	sh contrib/build-rpm
+install-shlibs::
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+uninstall-shlibs::
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+real-subdirs::
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+subdirs:: Makefile
+	$(Q) $(MAKE) -s real-subdirs
+	$(Q) touch subdirs
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+clean::
+	$(Q) $(RM) -f subdirs
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+$(LIBRARY).a: $(OBJS)
+	$(E) "	GEN_LIB $@"
+	$(Q) (if test -r $@; then $(RM) -f $@.bak && $(MV) $@ $@.bak; fi)
+	$(Q) $(ARGEN) $@ $(OBJS)
+	-@$(RANLIB) $@
+	$(Q) $(RM) -f ../$@
+	$(Q) (cd ..; $(LN) $(LINK_BUILD_FLAGS) \
+		`echo $(my_dir) | sed -e 's;lib/;;'`/$@ $@)
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+$(LIB)/$(LIBRARY).a: $(LIBRARY).a
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+LIBS_BLKID=	$(STATIC_LIBBLKID) $(STATIC_LIBUUID)
+DEPLIBS_BLKID=	$(DEPSTATIC_LIBBLKID) $(DEPSTATIC_LIBUUID)
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+.c.o:
+	$(E) "	CC $<"
+	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -c $< -o $@
+	$(Q) $(CHECK_CMD) $(ALL_CFLAGS) $<
+	$(Q) $(CPPCHECK_CMD) $(CPPFLAGS) $<
+#	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -g -pg -o profiled/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) -fPIC -shared -o elfshared/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) $(BSDLIB_PIC_FLAG) -o pic/$*.o -c $<
 
-install-libs: install-libs-recursive
+all:: $(SMANPAGES) blkid.pc
 
-uninstall-libs: uninstall-libs-recursive
+blkid_types.h: $(srcdir)/blkid_types.h.in $(top_builddir)/config.status
+	$(E) "	CONFIG.STATUS $@"
+	$(Q) cd $(top_builddir); \
+		CONFIG_FILES=$(my_dir)/blkid_types.h ./config.status
 
-coverage.txt: coverage.txt-recursive
+blkid.h: $(srcdir)/blkid.h.in
+	$(E) "	CP $@"
+	$(Q) cp $(srcdir)/blkid.h.in blkid.h
 
-check-recursive: all
+libblkid.3: $(DEP_SUBSTITUTE) $(srcdir)/libblkid.3.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $(srcdir)/libblkid.3.in libblkid.3
 
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+tst_cache: $(srcdir)/cache.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_cache -DTEST_PROGRAM $(srcdir)/cache.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_dev: $(srcdir)/dev.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_dev -DTEST_PROGRAM $(srcdir)/dev.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_devname: $(srcdir)/devname.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_devname -DTEST_PROGRAM $(srcdir)/devname.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_devno: $(srcdir)/devno.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_devno -DTEST_PROGRAM $(srcdir)/devno.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_getsize: $(srcdir)/getsize.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_getsize -DTEST_PROGRAM $(srcdir)/getsize.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_probe: $(srcdir)/probe.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_probe -DTEST_PROGRAM $(srcdir)/probe.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_read: $(srcdir)/read.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_read -DTEST_PROGRAM $(srcdir)/read.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_resolve: $(srcdir)/resolve.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_resolve -DTEST_PROGRAM $(srcdir)/resolve.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_save: $(srcdir)/save.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_save -DTEST_PROGRAM $(srcdir)/save.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_tag: $(srcdir)/tag.c $(DEPLIBS_BLKID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_tag -DTEST_PROGRAM $(srcdir)/tag.c $(LIBS_BLKID) $(ALL_CFLAGS)
+
+tst_types: tst_types.o blkid_types.h 
+	$(E) "	LD $@"
+	$(Q) $(CC) -o tst_types $(ALL_LDFLAGS) tst_types.o
+
+../../misc/blkid.o: $(top_srcdir)/misc/blkid.c blkid.h
+	$(E) "	CC $@"
+	$(Q) $(CC) $(ALL_CFLAGS) -c $(top_srcdir)/misc/blkid.c \
+		-o ../../misc/blkid.o
+
+blkid: ../../misc/blkid.o libblkid.a $(DEPLIBUUID)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o blkid ../../misc/blkid.o libblkid.a $(LIBUUID)
+
+test_probe: test_probe.in Makefile
+	$(E) "Creating test_probe..."
+	$(E) "#!/bin/sh" > test_probe
+	$(E) "SRCDIR=../../e2fsprogs-1.45.6/lib/blkid" >> test_probe
+	$(Q) cat $(srcdir)/test_probe.in >> test_probe
+	$(Q) chmod +x test_probe
+
+fullcheck check:: all tst_cache tst_dev tst_devname tst_devno \
+ tst_getsize tst_probe tst_read tst_resolve tst_save tst_tag \
+ test_probe tst_types
+	./test_probe
+	./tst_types
+
+blkid.pc: $(srcdir)/blkid.pc.in $(top_builddir)/config.status
+	$(E) "	CONFIG.STATUS $@"
+	$(Q) cd $(top_builddir); CONFIG_FILES=lib/blkid/blkid.pc ./config.status
+
+installdirs::
+	$(E) "	MKDIR_P $(libdir) $(includedir)/blkid"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(libdir) \
+		$(DESTDIR)$(includedir)/blkid $(DESTDIR)$(pkgconfigdir)
+
+install:: all installdirs 
+	$(E) "	INSTALL_DATA $(libdir)/libblkid.a"
+	$(Q) $(INSTALL_DATA) libblkid.a $(DESTDIR)$(libdir)/libblkid.a
+	-$(Q) $(RANLIB) $(DESTDIR)$(libdir)/libblkid.a
+	$(Q) $(CHMOD) $(LIBMODE) $(DESTDIR)$(libdir)/libblkid.a
+	$(Q) set -e; for i in $(HFILES_IN); do \
+		echo "	INSTALL_DATA $(includedir)/blkid/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(includedir)/blkid/$$i; \
+	done
+	$(Q) for i in $(SMANPAGES); do \
+		echo "	INSTALL_DATA $(man3dir)/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(man3dir)/$$i; \
+	done
+	$(E) "	INSTALL_DATA $(pkgconfigdir)/blkid.pc"
+	$(Q) $(INSTALL_DATA) blkid.pc $(DESTDIR)$(pkgconfigdir)/blkid.pc
+
+uninstall::
+	$(RM) -f $(DESTDIR)$(libdir)/libblkid.a \
+		$(DESTDIR)$(pkgconfigdir)/blkid.pc
+	$(RM) -rf $(DESTDIR)$(includedir)/blkid
+	for i in $(SMANPAGES); do \
+		$(RM) -f $(DESTDIR)$(man3dir)/$$i; \
 	done
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
+clean::
+	$(RM) -f \#* *.s *.o *.orig *.a *~ *.bak tst_cache tst_dev tst_devname \
+		tst_devno tst_getsize tst_probe tst_read tst_resolve tst_save \
+		tst_tag tst_types tests/*.out tests/*.ok \
+		tests/*.img results test_probe core profiled/* \
+		blkid.h blkid_types.h ../libblkid.a ../libblkid_p.a \
+		$(SMANPAGES) blkid blkid.pc
+	@echo rmdir tests/tmp tests
+	@(rmdir tests/tmp tests 2> /dev/null ; exit 0)
 
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-mostlyclean: mostlyclean-recursive mostlyclean-local
-
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
+mostlyclean:: clean
+distclean:: clean
+	$(RM) -f .depend Makefile blkid.pc \
 		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
 
-realclean-local: distclean-local
-	$(RM) -f configure
+$(OBJS): subdirs $(HFILES_IN)
 
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive
+# +++ Dependency line eater +++
+# 
+# Makefile dependencies follow.  This must be the last section in
+# the Makefile.in file
+#
+cache.o: $(srcdir)/cache.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+dev.o: $(srcdir)/dev.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+devname.o: $(srcdir)/devname.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+devno.o: $(srcdir)/devno.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+getsize.o: $(srcdir)/getsize.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+llseek.o: $(srcdir)/llseek.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+probe.o: $(srcdir)/probe.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h \
+ $(srcdir)/probe.h
+read.o: $(srcdir)/read.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+resolve.o: $(srcdir)/resolve.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+save.o: $(srcdir)/save.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+tag.o: $(srcdir)/tag.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/blkidP.h $(srcdir)/list.h
+version.o: $(srcdir)/version.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(top_srcdir)/version.h

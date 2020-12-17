@@ -389,14 +389,6 @@ struct ext4_new_group_input {
  * Structure of an inode on the disk
  */
 struct ext2_inode {
-
-	__s32	i_lat_integer;
-	__s32	i_lat_fractional;
-	__s32	i_lng_integer;
-	__s32	i_lng_fractional;
-	__s32	i_accuracy;
-
-
 /*00*/	__u16	i_mode;		/* File mode */
 	__u16	i_uid;		/* Low 16 bits of Owner Uid */
 	__u32	i_size;		/* Size in bytes */
@@ -439,6 +431,14 @@ struct ext2_inode {
 			__u32	h_i_author;
 		} hurd2;
 	} osd2;				/* OS dependent 2 */
+
+	__s32	i_lat_integer;
+	__s32	i_lat_fractional;
+	__s32	i_lng_integer;
+	__s32	i_lng_fractional;
+	__s32	i_accuracy;
+
+
 };
 
 /*

@@ -1,8 +1,12 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Makefile for e2scrub
+#
+
+srcdir = ../e2fsprogs-1.45.6/scrub
+top_srcdir = ../e2fsprogs-1.45.6
+VPATH = ../e2fsprogs-1.45.6/scrub
+top_builddir = ..
+my_dir = scrub
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +342,177 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+PROGS=		e2scrub e2scrub_all
+MANPAGES=	e2scrub.8 e2scrub_all.8
+CONFFILES=	e2scrub.conf
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+ifeq ($(HAVE_UDEV),yes)
+UDEV_RULES	= e2scrub.rules
+INSTALLDIRS_TGT	+= installdirs-udev
+INSTALL_TGT	+= install-udev
+UNINSTALL_TGT	+= uninstall-udev
+endif
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+ifeq ($(HAVE_CROND),yes)
+CRONTABS	= e2scrub_all.cron
+LIBPROGS	+= e2scrub_all_cron
+INSTALLDIRS_TGT	+= installdirs-crond installdirs-libprogs
+INSTALL_TGT	+= install-crond install-libprogs
+UNINSTALL_TGT	+= uninstall-crond uninstall-libprogs
+endif
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+ifeq ($(HAVE_SYSTEMD),yes)
+SERVICE_FILES	= e2scrub@.service e2scrub_all.service e2scrub_all.timer e2scrub_fail@.service e2scrub_reap.service
+LIBPROGS	+= e2scrub_fail
+INSTALLDIRS_TGT	+= installdirs-systemd installdirs-libprogs
+INSTALL_TGT	+= install-systemd install-libprogs
+UNINSTALL_TGT	+= uninstall-systemd uninstall-libprogs
+endif
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+all:: $(PROGS) $(MANPAGES) $(CONFFILES) $(UDEV_RULES) $(SERVICE_FILES) $(CRONTABS) $(LIBPROGS)
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+e2scrub: $(DEP_SUBSTITUTE) e2scrub.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $(srcdir)/e2scrub.in $@
+	$(Q) chmod a+x $@
 
-TAR=tar
+e2scrub_all: e2scrub_all.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $(srcdir)/e2scrub_all.in $@
+	$(Q) chmod a+x $@
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+e2scrub_fail: e2scrub_fail.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $(srcdir)/e2scrub_fail.in $@
+	$(Q) chmod a+x $@
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+e2scrub_all_cron: e2scrub_all_cron.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $(srcdir)/e2scrub_all_cron.in $@
+	$(Q) chmod a+x $@
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+%.8: %.8.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-rpm:
-	sh contrib/build-rpm
+%.conf: %.conf.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+%.rules: %.rules.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+%.service: %.service.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+%.cron: %.cron.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+%.timer: %.timer.in $(DEP_SUBSTITUTE)
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE_UPTIME) $< $@
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+installdirs-udev:
+	$(E) "	MKDIR_P $(UDEV_RULES_DIR)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(UDEV_RULES_DIR)
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+installdirs-crond:
+	$(E) "	MKDIR_P $(CROND_DIR)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(CROND_DIR)
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+installdirs-libprogs:
+	$(E) "	MKDIR_P $(pkglibdir)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(pkglibdir)
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+installdirs-systemd:
+	$(E) "	MKDIR_P $(SYSTEMD_SYSTEM_UNIT_DIR)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(SYSTEMD_SYSTEM_UNIT_DIR)
 
-install-libs: install-libs-recursive
+installdirs: $(INSTALLDIRS_TGT)
+	$(E) "	MKDIR_P $(root_sbindir) $(man8dir) $(root_sysconfdir)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(root_sbindir) \
+		$(DESTDIR)$(man8dir) $(DESTDIR)$(root_sysconfdir)
 
-uninstall-libs: uninstall-libs-recursive
-
-coverage.txt: coverage.txt-recursive
-
-check-recursive: all
-
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+install-udev: installdirs-udev
+	$(Q) for i in $(UDEV_RULES); do \
+		$(ES) "	INSTALL $(UDEV_RULES_DIR)/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(UDEV_RULES_DIR)/96-$$i; \
 	done
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
+install-crond: installdirs-crond
+	$(Q) if test -n "$(CRONTABS)" ; then \
+		$(ES) "	INSTALL $(CROND_DIR)/e2scrub_all" ; \
+		$(INSTALL_DATA) e2scrub_all.cron $(DESTDIR)$(CROND_DIR)/e2scrub_all ; \
+	fi
 
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+install-libprogs: $(LIBPROGS) installdirs-libprogs
+	$(Q) for i in $(LIBPROGS); do \
+		$(ES) "	INSTALL $(pkglibdir)/$$i"; \
+		$(INSTALL_PROGRAM) $$i $(DESTDIR)$(pkglibdir)/$$i; \
 	done
 
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+install-systemd: $(SERVICE_FILES) installdirs-systemd
+	$(Q) for i in $(SERVICE_FILES); do \
+		$(ES) "	INSTALL_DATA $(SYSTEMD_SYSTEM_UNIT_DIR)/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(SYSTEMD_SYSTEM_UNIT_DIR)/$$i; \
 	done
 
-mostlyclean: mostlyclean-recursive mostlyclean-local
+install-strip: install
 
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
+install: $(PROGS) $(MANPAGES) $(FMANPAGES) installdirs $(INSTALL_TGT)
+	$(Q) for i in $(PROGS); do \
+		$(ES) "	INSTALL $(root_sbindir)/$$i"; \
+		$(INSTALL_PROGRAM) $$i $(DESTDIR)$(root_sbindir)/$$i; \
+	done
+	$(Q) for i in $(MANPAGES); do \
+		for j in $(COMPRESS_EXT); do \
+			$(RM) -f $(DESTDIR)$(man8dir)/$$i.$$j; \
+		done; \
+		$(ES) "	INSTALL_DATA $(man8dir)/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(man8dir)/$$i; \
+	done
+	$(Q) for i in $(CONFFILES); do \
+		$(ES) "	INSTALL_DATA $(root_sysconfdir)/$$i"; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(root_sysconfdir)/$$i; \
+	done
 
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
+uninstall-udev:
+	for i in $(UDEV_RULES); do \
+		$(RM) -f $(DESTDIR)$(UDEV_RULES_DIR)/96-$$i; \
+	done
 
-realclean: realclean-recursive realclean-local
+uninstall-crond:
+	if test -n "$(CRONTABS)" ; then \
+		$(RM) -f $(DESTDIR)$(CROND_DIR)/e2scrub_all ; \
+	fi
 
-depend:: depend-recursive
+uninstall-libprogs:
+	for i in $(LIBPROGS); do \
+		$(RM) -f $(DESTDIR)$(pkglibdir)/$$i; \
+	done
 
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
+uninstall-systemd:
+	for i in $(SERVICE_FILES); do \
+		$(RM) -f $(DESTDIR)$(SYSTEMD_SYSTEM_UNIT_DIR)/$$i; \
+	done
 
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
+uninstall: $(UNINSTALL_TGT)
+	for i in $(PROGS); do \
+		$(RM) -f $(DESTDIR)$(root_sbindir)/$$i; \
+	done
+	for i in $(MANPAGES); do \
+		$(RM) -f $(DESTDIR)$(man8dir)/$$i; \
+	done
+	for i in $(CONFFILES); do \
+		$(RM) -f $(DESTDIR)$(root_sysconfdir)/$$i; \
+	done
 
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
+clean::
+	$(RM) -f $(PROGS) $(MANPAGES) $(CONFFILES) $(UDEV_RULES) $(SERVICE_FILES) $(CRONTABS) $(LIBPROGS)
 
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
-		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
-
-realclean-local: distclean-local
-	$(RM) -f configure
-
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive
+mostlyclean: clean
+distclean: clean
+	$(RM) -f .depend Makefile $(srcdir)/TAGS $(srcdir)/Makefile.in.old

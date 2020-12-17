@@ -1,8 +1,12 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Makefile for the doc directory
+#
+
+srcdir = ../e2fsprogs-1.45.6/doc
+top_srcdir = ../e2fsprogs-1.45.6
+VPATH = ../e2fsprogs-1.45.6/doc
+top_builddir = ..
+my_dir = doc
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +342,74 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+DVI=texi2dvi --clean
+DVIPS=dvips -o "$@"
+INFO=echo Makeinfo is missing. Info documentation will not be built.
+HTML=makeinfo --html --no-split
+PS2PDF=ps2pdf
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+all:: libext2fs.info libext2fs.dvi libext2fs.html
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
-
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
-
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
-
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
-
-TAR=tar
-
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
-
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
-
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
-
-rpm:
-	sh contrib/build-rpm
-
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
-
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+install-doc-libs: libext2fs.info libext2fs.dvi
+	$(Q) $(RM) -rf $(DESTDIR)$(infodir)/libext2fs.info*
+	$(E) "	MKDIR_P $(infodir)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(infodir)
+	-$(Q) for i in libext2fs.info* ; do \
+		echo "	INSTALL_DATA $(infodir)/$$i" ; \
+		$(INSTALL_DATA) $$i $(DESTDIR)$(infodir)/$$i ; \
+	done
+	$(E) "	GZIP $(infodir)/libext2fs.info*"
+	-$(Q) gzip -9n $(DESTDIR)$(infodir)/libext2fs.info*
 
 uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+	$(RM) -rf $(DESTDIR)$(infodir)/libext2fs.info*
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+libext2fs.info: $(srcdir)/libext2fs.texinfo
+	$(E) "	MAKEINFO $@"
+	-$(Q) $(INFO) $(srcdir)/libext2fs.texinfo
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+libext2fs.dvi: $(srcdir)/libext2fs.texinfo
+	$(E) "	TEXI2DVI $@"
+	-$(Q) $(DVI) $(srcdir)/libext2fs.texinfo
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+libext2fs.ps: libext2fs.dvi
+	$(E) "	DVIPS $@"
+	-$(Q) $(DVIPS) libext2fs.dvi
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+libext2fs.pdf: libext2fs.ps
+	$(E) "	PS2PDF $@"
+	-$(Q) $(PS2PDF) libext2fs.ps
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+libext2fs.html: $(srcdir)/libext2fs.texinfo
+	$(E) "	TEXI2HTML $@"
+	-$(Q) $(HTML) $(srcdir)/libext2fs.texinfo
 
-install-libs: install-libs-recursive
+.PHONY: distclean
+distclean:: clean
+	$(RM) -f Makefile
 
-uninstall-libs: uninstall-libs-recursive
+.PHONY: clean
+clean:: clean-all
 
-coverage.txt: coverage.txt-recursive
+.PHONY: clean-all
+clean-all:: clean-tex clean-backup clean-final clean-tarfiles clean-html
 
-check-recursive: all
+.PHONY: clean-final
+clean-final::
+	$(RM) -f *.ps *.info *.info-? *.html *.pdf
 
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
+.PHONY: clean-tex
+clean-tex::
+	$(RM) -f *.aux *.cp *.dvi *.fn *.ky *.log *.pg *.toc *.tp *.vr *.fns
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
+.PHONY: clean-backup
+clean-backup::
+	$(RM) -f *~ #*
 
+.PHONY: clean-tarfiles
+clean-tarfiles::
+	$(RM) -f *.tar *.tar.gz *.tgz
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
+clean-html::
+	$(RM) -f *.html
 
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-mostlyclean: mostlyclean-recursive mostlyclean-local
-
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
-		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
-
-realclean-local: distclean-local
-	$(RM) -f configure
-
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive

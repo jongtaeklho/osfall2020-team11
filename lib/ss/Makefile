@@ -1,9 +1,14 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Makefile for lib/ss
+#
+
+srcdir = ../../e2fsprogs-1.45.6/lib/ss
+top_srcdir = ../../e2fsprogs-1.45.6
+VPATH = ../../e2fsprogs-1.45.6/lib/ss
+top_builddir = ../..
+my_dir = lib/ss
 INSTALL = /usr/bin/install -c
+DLOPEN_LIB = -ldl
 
 # Beginning of file MCONFIG
 
@@ -338,157 +343,244 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+LIBRARY= libss
+LIBDIR= ss
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+ELF_VERSION = 2.0
+ELF_SO_VERSION = 2
+ELF_IMAGE = libss
+ELF_MYDIR = ss
+ELF_INSTALL_DIR = $(root_libdir)
+ELF_OTHER_LIBS = -lcom_err $(DLOPEN_LIB)
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+BSDLIB_VERSION = 1.0
+BSDLIB_IMAGE = libss
+BSDLIB_MYDIR = ss
+BSDLIB_INSTALL_DIR = $(root_libdir)
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+TAGS=etags
+MK_CMDS=	_SS_DIR_OVERRIDE=$(srcdir) ./mk_cmds
+COMPILE_ET=	_ET_DIR_OVERRIDE=$(srcdir)/../et ../et/compile_et
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+.c.o:
+	$(E) "	CC $<"
+	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -c $<
+	$(Q) $(CHECK_CMD) $(ALL_CFLAGS) $<
+	$(Q) $(CPPCHECK_CMD) $(CPPFLAGS) $<
+#	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -g -pg -o profiled/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) -DSHARED_ELF_LIB -fPIC -shared -o elfshared/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) $(BSDLIB_PIC_FLAG) -o pic/$*.o -c $<
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+# for the library
 
-TAR=tar
+# with ss_err.o first, ss_err.h should get rebuilt first too.  should not
+# be relying on this, though.
+OBJS=	ss_err.o \
+	std_rqs.o \
+	invocation.o help.o \
+	execute_cmd.o listen.o parse.o error.o prompt.o \
+	request_tbl.o list_rqs.o pager.o requests.o \
+	data.o get_readline.o
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+SRCS=	$(srcdir)/invocation.c $(srcdir)/help.c \
+	$(srcdir)/execute_cmd.c $(srcdir)/listen.c $(srcdir)/parse.c \
+	$(srcdir)/error.c $(srcdir)/prompt.c $(srcdir)/request_tbl.c \
+	$(srcdir)/list_rqs.c $(srcdir)/pager.c $(srcdir)/requests.c \
+	$(srcdir)/data.c $(srcdir)/get_readline.c
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+all:: mk_cmds
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+all:: subdirs $(LIBRARY).a
 
-rpm:
-	sh contrib/build-rpm
+install-shlibs-strip::
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+install-shlibs::
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+uninstall-shlibs::
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+real-subdirs::
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+subdirs:: Makefile
+	$(Q) $(MAKE) -s real-subdirs
+	$(Q) touch subdirs
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+clean::
+	$(Q) $(RM) -f subdirs
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+$(LIBRARY).a: $(OBJS)
+	$(E) "	GEN_LIB $@"
+	$(Q) (if test -r $@; then $(RM) -f $@.bak && $(MV) $@ $@.bak; fi)
+	$(Q) $(ARGEN) $@ $(OBJS)
+	-@$(RANLIB) $@
+	$(Q) $(RM) -f ../$@
+	$(Q) (cd ..; $(LN) $(LINK_BUILD_FLAGS) \
+		`echo $(my_dir) | sed -e 's;lib/;;'`/$@ $@)
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+$(LIB)/$(LIBRARY).a: $(LIBRARY).a
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+CODE= $(SRCS) $(MKCMDSFILES)
 
-install-libs: install-libs-recursive
+MKCMDSOBJS=	mk_cmds.o utils.o options.o ct.tab.o cmd_tbl.lex.o
 
-uninstall-libs: uninstall-libs-recursive
+MKCMDSFILES=	mk_cmds.c utils.c options.c ct.y cmd_tbl.lex.l
 
-coverage.txt: coverage.txt-recursive
+MKCMDSCSRCS=	mk_cmds.c utils.c options.c ct.tab.c cmd_tbl.lex.c
 
-check-recursive: all
 
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+HFILES=	ss.h ss_internal.h
+SHARE_FILES= ct_c.awk ct_c.sed
+
+INSTALL_HFILES=	ss.h 
+
+# for 'tags' and dependencies
+
+CFILES=	$(SRCS) $(MKCMDSCSRCS) test_ss.c
+
+# for building archives
+
+FILES=	$(SRCS) $(MKCMDSFILES) $(HFILES) \
+	ss_err.et std_rqs.ct Makefile \
+	test_ss.c ss 
+
+all::	libss.a ss.pc # libss_p.a lint
+
+std_rqs.c: std_rqs.ct mk_cmds
+	$(E) "	MK_CMDS $@"
+	$(Q) DIR=$(srcdir) $(MK_CMDS) $(srcdir)/std_rqs.ct
+
+std_rqs.o: ss_err.h
+
+test_cmd.c: test_cmd.ct mk_cmds
+	$(E) "	MK_CMDS $@"
+	$(Q) DIR=$(srcdir) $(MK_CMDS) $(srcdir)/test_cmd.ct
+
+ss_err.c ss_err.h: ss_err.et
+	$(E) "	COMPILE_ET ss_err.et"
+	$(Q) $(COMPILE_ET) $(srcdir)/ss_err.et
+
+ct.tab.c ct.tab.h: ct.y
+	$(RM) -f ct.tab.* y.*
+	$(YACC) -d $(srcdir)/ct.y
+	$(MV) -f y.tab.c ct.tab.c
+	$(MV) -f y.tab.h ct.tab.h
+
+#libss.o:	$(OBJS)
+#	$(LD) -r -s -o $@ $(OBJS)
+#	$(CHMOD) -x $@
+
+mk_cmds: $(DEP_SUBSTITUTE) $(srcdir)/mk_cmds.sh.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE) $(srcdir)/mk_cmds.sh.in mk_cmds
+	$(Q) $(CHMOD) +x mk_cmds
+
+ss.pc: $(srcdir)/ss.pc.in $(top_builddir)/config.status
+	$(E) "	CONFIG.STATUS $@"
+	$(Q) cd $(top_builddir); CONFIG_FILES=lib/ss/ss.pc ./config.status
+
+installdirs::
+	$(E) "	MKDIR_P $(libdir) $(includedir)/ss $(datadir)/ss $(bindir)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(libdir) \
+		$(DESTDIR)$(includedir)/ss $(DESTDIR)$(datadir)/ss \
+		$(DESTDIR)$(bindir) $(DESTDIR)$(pkgconfigdir)
+
+install:: libss.a $(INSTALL_HFILES) installdirs ss_err.h mk_cmds ss.pc
+	$(E) "	INSTALL_DATA $(DESTDIR)$(libdir)/libss.a"
+	$(Q) $(INSTALL_DATA) libss.a $(DESTDIR)$(libdir)/libss.a
+	-$(Q) $(RANLIB) $(DESTDIR)$(libdir)/libss.a
+	$(Q) $(CHMOD) $(LIBMODE) $(DESTDIR)$(libdir)/libss.a
+	$(Q) $(RM) -f $(DESTDIR)$(includedir)/ss/*
+	$(Q) for i in $(INSTALL_HFILES); do \
+		echo "	INSTALL_DATA $(DESTDIR)$(includedir)/ss/$$i"; \
+		$(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(includedir)/ss/$$i; \
 	done
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+	$(E) "	INSTALL_DATA $(includedir)/ss/ss_err.h"
+	$(Q) $(INSTALL_DATA) ss_err.h $(DESTDIR)$(includedir)/ss/ss_err.h
+	$(Q) for i in $(SHARE_FILES); do \
+		echo "	INSTALL_DATA $(DESTDIR)$(datadir)/ss/$$i"; \
+		$(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(datadir)/ss/$$i; \
 	done
+	$(E) "	INSTALL $(bindir)/mk_cmds"
+	$(Q) $(INSTALL) mk_cmds $(DESTDIR)$(bindir)/mk_cmds
+	$(E) "	INSTALL_DATA $(man1dir)/mk_cmds.1"
+	$(Q) $(INSTALL_DATA) $(srcdir)/mk_cmds.1 $(DESTDIR)$(man1dir)/mk_cmds.1
+	$(E) "	INSTALL_DATA $(pkgconfigdir)/ss.pc"
+	$(Q) $(INSTALL_DATA) ss.pc $(DESTDIR)$(pkgconfigdir)/ss.pc
 
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
+uninstall::
+	$(RM) -f $(DESTDIR)$(libdir)/libss.a $(DESTDIR)$(bindir)/mk_cmds \
+		$(DESTDIR)$(pkgconfigdir)/ss.pc \
+		$(DESTDIR)$(man1dir)/mk_cmds.1 
+	$(RM) -rf $(DESTDIR)$(includedir)/ss $(DESTDIR)$(datadir)/ss
 
-mostlyclean: mostlyclean-recursive mostlyclean-local
+test_ss: test_ss.o test_cmd.o $(DEPLIBSS) $(DEPLIBCOM_ERR)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o $@ test_ss.o test_cmd.o $(ALL_CFLAGS) $(ALL_LDFLAGS) \
+		$(LIBSS) $(LIBCOM_ERR) $(SYSLIBS)
 
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
+fullcheck check:: all test_ss
+	$(E) "	RUN TEST test_ss"
+	-@($(TESTENV) ./test_ss -f $(srcdir)/test_script > test_out 2>&1; exit 0)
+	$(Q) if diff test_out $(srcdir)/test_script_expected > test.diff; then \
+		true ; else echo "Regression test for ss library failed!"; exit 1 ; fi
 
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
+clean::
+	$(RM) -f ../libss.a libss.a mk_cmds ss_err.h ss_err.c std_rqs.c \
+		tst_cmds.c test_ss test_out test.diff *.o *~ \#* *.bak core \
+		test_cmd.c ss.pc
 
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
+mostlyclean:: clean
+distclean:: clean
+	$(RM) -f .depend Makefile ss.pc \
 		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
 
-realclean-local: distclean-local
-	$(RM) -f configure
+#
+# Hack to parallel makes recognize dependencies correctly.
+#
+$(top_builddir)/lib/ss/ss_err.h: ss_err.h
 
-check::	all check-recursive
+$(OBJS): subdirs
 
-fullcheck:: all fullcheck-recursive
+# +++ Dependency line eater +++
+# 
+# Makefile dependencies follow.  This must be the last section in
+# the Makefile.in file
+#
+invocation.o: $(srcdir)/invocation.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+help.o: $(srcdir)/help.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+execute_cmd.o: $(srcdir)/execute_cmd.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+listen.o: $(srcdir)/listen.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+parse.o: $(srcdir)/parse.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+error.o: $(srcdir)/error.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(top_srcdir)/lib/et/com_err.h \
+ $(srcdir)/ss_internal.h $(srcdir)/ss.h $(top_builddir)/lib/ss/ss_err.h
+prompt.o: $(srcdir)/prompt.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+request_tbl.o: $(srcdir)/request_tbl.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+list_rqs.o: $(srcdir)/list_rqs.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+pager.o: $(srcdir)/pager.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+requests.o: $(srcdir)/requests.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+data.o: $(srcdir)/data.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h
+get_readline.o: $(srcdir)/get_readline.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/ss_internal.h $(srcdir)/ss.h \
+ $(top_builddir)/lib/ss/ss_err.h $(top_srcdir)/lib/et/com_err.h

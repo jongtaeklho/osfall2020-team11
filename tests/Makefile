@@ -1,8 +1,12 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Makefile for the tests directory
+#
+
+srcdir = ../e2fsprogs-1.45.6/tests
+top_srcdir = ../e2fsprogs-1.45.6
+VPATH = ../e2fsprogs-1.45.6/tests
+top_builddir = ..
+my_dir = tests
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +342,96 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+all:: check test_one test_script
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+test_one: $(srcdir)/test_one.in Makefile mke2fs.conf test_data.tmp
+	@echo "Creating test_one script..."
+	@[ -f test_one ] && chmod u+w test_one || true
+	@echo "#!/bin/sh" > test_one
+	@echo "HTREE=y" >> test_one
+	@echo "QUOTA=y" >> test_one
+	@echo "SRCDIR=../e2fsprogs-1.45.6/tests" >> test_one
+	@echo "DIFF_OPTS=-u" >> test_one
+	@echo "SIZEOF_TIME_T=8" >> test_one
+	@echo "DD=dd" >>test_one
+	@cat $(srcdir)/test_one.in >> test_one
+	@chmod +x-w test_one
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+test_script: test_one test_script.in Makefile mke2fs.conf test_data.tmp
+	@echo "Creating test_script..."
+	@[ -f test_script ] && chmod u+w test_script || true
+	@echo "#!/bin/sh" > test_script
+	@echo "SRCDIR=../e2fsprogs-1.45.6/tests" >> test_script
+	@cat $(srcdir)/test_script.in >> test_script
+	@chmod +x-w test_script
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+mke2fs.conf: $(srcdir)/mke2fs.conf.in
+	$(CP) $(srcdir)/mke2fs.conf.in mke2fs.conf
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+test_data.tmp: $(srcdir)/scripts/gen-test-data
+	$(srcdir)/scripts/gen-test-data > test_data.tmp
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+.PHONY : test_pre test_post check always_run
 
-TAR=tar
+always_run:
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+TESTS=$(wildcard $(srcdir)/[a-z]_*)
+#TESTS != echo $(srcdir)/[a-z]_*
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+SKIP_SLOW_TESTS=--skip-slow-tests
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+$(TESTS):: test_one always_run
+	@./test_one $(SKIP_SLOW_TESTS) $@
 
-rpm:
-	sh contrib/build-rpm
+foo:
+	echo $(TESTS)
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+test_pre:
+	@$(RM) -f *.failed
+	@echo "Running e2fsprogs test suite..."
+	@echo " "
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+test_post: test_pre $(TESTS)
+	@$(srcdir)/test_post
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+check:: test_pre test_post test_script
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+fullcheck::
+	$(MAKE) SKIP_SLOW_TESTS= check
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
-
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
-
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
-
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
-
-install-libs: install-libs-recursive
-
-uninstall-libs: uninstall-libs-recursive
-
-coverage.txt: coverage.txt-recursive
-
-check-recursive: all
-
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
+check-failed: $(basename $(wildcard *.failed))
+	@$(srcdir)/test_post
 
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
+TDIR=f_testnew
+# Target which creates a new testcase to simplify adding new regression tests.
+testnew:
+	@echo "Creating a new e2fsck testcase in ${TDIR}"
+	@mkdir -p ${TDIR}
+	dd if=/dev/zero of=${TDIR}/image bs=1k count=8k
+	$(top_srcdir)/misc/mke2fs -j -F -N 256 ${TDIR}/image
+	@echo "new test description" > ${TDIR}/name
+	@echo; echo; echo "New test filesystem at ${TDIR}/image."
+	@echo "Now, break the filesystem as appropriate, and run 'make testend'"
 
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
+EXPECT1=${TDIR}/expect.1
+EXPECT2=${TDIR}/expect.2
+# Target which generates the expect files for the new testcase.
+testend: test_one ${TDIR}/image
+	gzip -9 ${TDIR}/image
+	@OUT1=${EXPECT1} OUT2=${EXPECT2} ./test_one ${TDIR}
+	@echo; echo; echo "*** output from first e2fsck run (${EXPECT1}) ***"
+	@cat ${EXPECT1}
+	@echo "*** output from second e2fsck run (${EXPECT2}) ***"
+	@cat ${EXPECT2}
+	@echo "*** end of e2fsck output ***"
+	@echo; echo "Hopefully e2fsck now fixes this problem properly."
+	@echo "If all is well, edit ${TDIR}/name and rename ${TDIR}."
 
-mostlyclean: mostlyclean-recursive mostlyclean-local
+clean::
+	$(RM) -f *~ *.log *.new *.failed *.ok *.tmp *.slow
+	$(RM) -f test_one test_script mke2fs.conf test_data.tmp
 
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
-		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
-
-realclean-local: distclean-local
-	$(RM) -f configure
-
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive
+distclean:: clean
+	$(RM) -f Makefile
+	$(RM) -rf ${TDIR}

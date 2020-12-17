@@ -1,8 +1,12 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Standard e2fsprogs prologue....
+#
+
+srcdir = ../e2fsprogs-1.45.6/ext2ed
+top_srcdir = ../e2fsprogs-1.45.6
+VPATH = ../e2fsprogs-1.45.6/ext2ed
+top_builddir = ..
+my_dir = ext2ed
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +342,86 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+PROGS=		ext2ed
+MANPAGES=	ext2ed.8
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+DOC_DIR		=	$datadir/doc/ext2ed
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+LIBS		=	-lncurses $(LIBEXT2FS)
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+SRCS=	$(srcdir)/main.c $(srcdir)/init.c $(srcdir)/general_com.c       \
+	$(srcdir)/inode_com.c $(srcdir)/dir_com.c $(srcdir)/super_com.c \
+	$(srcdir)/disk.c $(srcdir)/win.c $(srcdir)/group_com.c          \
+	$(srcdir)/file_com.c $(srcdir)/blockbitmap_com.c                \
+	$(srcdir)/ext2_com.c $(srcdir)/inodebitmap_com.c
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+OBJS=	main.o init.o general_com.o inode_com.o dir_com.o super_com.o    \
+	disk.o win.o group_com.o file_com.o blockbitmap_com.o ext2_com.o \
+	inodebitmap_com.o
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+DOCS=   doc/ext2ed-design.pdf doc/user-guide.pdf doc/ext2fs-overview.pdf \
+	doc/ext2ed-design.html doc/user-guide.html doc/ext2fs-overview.html
 
-TAR=tar
+.c.o:
+	$(CC) -c $(ALL_CFLAGS) $< -o $@
+	$(CHECK_CMD) $(ALL_CFLAGS) $<
+	$(CPPCHECK_CMD) $(CPPFLAGS) $<
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+.SUFFIXES: .sgml .ps .pdf .html
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+.sgml.ps:
+	mkdir -p doc
+	sgmltools -b ps $< 
+	-mv `echo $< | sed -e 's/.sgml$$/.ps/'` $@
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+.sgml.pdf:
+	mkdir -p doc
+	sgmltools -b pdf $< 
+	-mv `echo $< | sed -e 's/.sgml$$/.pdf/'` $@
 
-rpm:
-	sh contrib/build-rpm
+.sgml.html:
+	mkdir -p doc
+	sgmltools -b onehtml $< 
+	-mv `echo $< | sed -e 's/.sgml$$/.html/'` $@
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+all:: $(PROGS) $(MANPAGES) ext2ed.conf 
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+docs: $(DOCS)
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+ext2ed: $(OBJS)
+	$(CC) $(ALL_LDFLAGS) -o ext2ed $(OBJS) $(LIBS)
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+ext2ed.8: $(DEP_SUBSTITUTE) $(srcdir)/ext2ed.8.in
+	$(SUBSTITUTE_UPTIME) $(srcdir)/ext2ed.8.in ext2ed.8
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+ext2ed.conf: $(DEP_SUBSTITUTE) $(srcdir)/ext2ed.conf.in
+	$(SUBSTITUTE_UPTIME) $(srcdir)/ext2ed.conf.in ext2ed.conf
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+clean::
+	$(RM) -f ext2ed $(OBJS) $(DOCS) ext2ed.conf ext2ed.8
+	-rmdir doc
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+install: ext2ed
+	install -d $(root_sysconfdir)
+	install -m 755 ext2ed $(sbindir)
+	install -m 644 $(srcdir)/ext2.descriptors $(datadir)
+	install -m 644 ext2ed.conf $(root_sysconfdir)
+	install -m 644 ext2ed.8 $(man8dir)
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
-
-install-libs: install-libs-recursive
-
-uninstall-libs: uninstall-libs-recursive
-
-coverage.txt: coverage.txt-recursive
-
-check-recursive: all
-
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-mostlyclean: mostlyclean-recursive mostlyclean-local
-
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
-		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
-
-realclean-local: distclean-local
-	$(RM) -f configure
-
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive
+# +++ Dependency line eater +++
+# 
+# Makefile dependencies follow.  This must be the last section in
+# the Makefile.in file
+#
+main.o: $(srcdir)/main.c $(srcdir)/ext2ed.h
+general_com.o: $(srcdir)/general_com.c $(srcdir)/ext2ed.h
+inode_com.o: $(srcdir)/inode_com.c $(srcdir)/ext2ed.h
+dir_com.o: $(srcdir)/dir_com.c $(srcdir)/ext2ed.h
+super_com.o: $(srcdir)/super_com.c $(srcdir)/ext2ed.h
+disk.o: $(srcdir)/disk.c $(srcdir)/ext2ed.h
+win.o: $(srcdir)/win.c $(srcdir)/ext2ed.h
+group_com.o: $(srcdir)/group_com.c $(srcdir)/ext2ed.h
+file_com.o: $(srcdir)/file_com.c $(srcdir)/ext2ed.h
+blockbitmap_com.o: $(srcdir)/blockbitmap_com.c $(srcdir)/ext2ed.h
+ext2_com.o: $(srcdir)/ext2_com.c $(srcdir)/ext2ed.h
+inodebitmap_com.o: $(srcdir)/inodebitmap_com.c $(srcdir)/ext2ed.h

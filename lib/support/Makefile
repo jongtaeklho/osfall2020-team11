@@ -1,8 +1,11 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+# Makefile for e2fsprog's internal support
+#
+
+srcdir = ../../e2fsprogs-1.45.6/lib/support
+top_srcdir = ../../e2fsprogs-1.45.6
+VPATH = ../../e2fsprogs-1.45.6/lib/support
+top_builddir = ../..
+my_dir = lib/support
 INSTALL = /usr/bin/install -c
 
 # Beginning of file MCONFIG
@@ -338,157 +341,186 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+all::
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+OBJS=		cstring.o \
+		mkquota.o \
+		plausible.o \
+		profile.o \
+		parse_qtype.o \
+		profile_helpers.o \
+		prof_err.o \
+		quotaio.o \
+		quotaio_v2.o \
+		quotaio_tree.o \
+		dict.o
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+SRCS=		$(srcdir)/argv_parse.c \
+		$(srcdir)/cstring.c \
+		$(srcdir)/mkquota.c \
+		$(srcdir)/parse_qtype.c \
+		$(srcdir)/plausible.c \
+		$(srcdir)/profile.c \
+		$(srcdir)/profile_helpers.c \
+		prof_err.c \
+		$(srcdir)/quotaio.c \
+		$(srcdir)/quotaio_tree.c \
+		$(srcdir)/quotaio_v2.c \
+		$(srcdir)/dict.c
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+LIBRARY= libsupport
+LIBDIR= support
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+all:: subdirs $(LIBRARY).a
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+install-shlibs-strip::
 
-TAR=tar
+install-shlibs::
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+uninstall-shlibs::
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+real-subdirs::
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+subdirs:: Makefile
+	$(Q) $(MAKE) -s real-subdirs
+	$(Q) touch subdirs
 
-rpm:
-	sh contrib/build-rpm
+clean::
+	$(Q) $(RM) -f subdirs
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+$(LIBRARY).a: $(OBJS)
+	$(E) "	GEN_LIB $@"
+	$(Q) (if test -r $@; then $(RM) -f $@.bak && $(MV) $@ $@.bak; fi)
+	$(Q) $(ARGEN) $@ $(OBJS)
+	-@$(RANLIB) $@
+	$(Q) $(RM) -f ../$@
+	$(Q) (cd ..; $(LN) $(LINK_BUILD_FLAGS) \
+		`echo $(my_dir) | sed -e 's;lib/;;'`/$@ $@)
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+$(LIB)/$(LIBRARY).a: $(LIBRARY).a
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+COMPILE_ET=	_ET_DIR_OVERRIDE=$(srcdir)/../et ../et/compile_et
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+.c.o:
+	$(E) "	CC $<"
+	$(Q) $(CC) $(ALL_CFLAGS) -c $< -o $@
+	$(Q) $(CHECK_CMD) $(ALL_CFLAGS) $<
+	$(Q) $(CPPCHECK_CMD) $(CPPFLAGS) $<
+#	$(Q) $(CC) $(ALL_CFLAGS) -g -pg -o profiled/$*.o -c $<
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+installdirs::
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+install:: all
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+uninstall::
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+prof_err.c prof_err.h: prof_err.et
+	$(E) "	COMPILE_ET prof_err.et"
+	$(Q) $(COMPILE_ET) $(srcdir)/prof_err.et
 
-install-libs: install-libs-recursive
+test_profile: $(srcdir)/profile.c profile_helpers.o argv_parse.o \
+		prof_err.o profile.h $(DEPSTATIC_LIBCOM_ERR)
+	$(E) "	LD $@"
+	$(Q) $(CC) -o test_profile -DDEBUG_PROGRAM $(srcdir)/profile.c prof_err.o \
+		profile_helpers.o argv_parse.o $(STATIC_LIBCOM_ERR) \
+		$(ALL_CFLAGS)
 
-uninstall-libs: uninstall-libs-recursive
+test_cstring: $(srcdir)/cstring.c
+	$(E) " CC $@"
+	$(Q) $(CC) -o test_cstring -DDEBUG_PROGRAM $(srcdir)/cstring.c \
+		$(ALL_CFLAGS)
 
-coverage.txt: coverage.txt-recursive
+clean::
+	$(RM) -f \#* *.s *.o *.a *~ *.bak core profiled/* \
+		../libsupport.a ../libsupport_p.a $(SMANPAGES) \
+		prof_err.c prof_err.h test_profile test_cstring
 
-check-recursive: all
+#fullcheck check:: tst_uuid
+#	LD_LIBRARY_PATH=$(LIB) DYLD_LIBRARY_PATH=$(LIB) ./tst_uuid
 
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-mostlyclean: mostlyclean-recursive mostlyclean-local
-
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
+mostlyclean:: clean
+distclean:: clean
+	$(RM) -f .depend Makefile \
 		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
 
-realclean-local: distclean-local
-	$(RM) -f configure
+#
+# Hack to parallel makes recognize dependencies correctly.
+#
+../../lib/libsupport.a: libsupport.a
+../../lib/libsupport.so: image
+../../lib/libsupport.dylib: image
 
-check::	all check-recursive
+$(OBJS):
 
-fullcheck:: all fullcheck-recursive
+# +++ Dependency line eater +++
+# 
+# Makefile dependencies follow.  This must be the last section in
+# the Makefile.in file
+#
+argv_parse.o: $(srcdir)/argv_parse.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/argv_parse.h
+cstring.o: $(srcdir)/cstring.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/cstring.h
+mkquota.o: $(srcdir)/mkquota.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(top_srcdir)/lib/ext2fs/ext2_fs.h \
+ $(top_builddir)/lib/ext2fs/ext2_types.h $(top_srcdir)/lib/ext2fs/ext2fs.h \
+ $(top_srcdir)/lib/ext2fs/ext3_extents.h $(top_srcdir)/lib/et/com_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_io.h $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(top_srcdir)/lib/e2p/e2p.h \
+ $(srcdir)/quotaio.h $(srcdir)/dqblk_v2.h $(srcdir)/quotaio_tree.h \
+ $(srcdir)/quotaio_v2.h $(srcdir)/common.h $(srcdir)/dict.h
+parse_qtype.o: $(srcdir)/parse_qtype.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/quotaio.h \
+ $(top_srcdir)/lib/ext2fs/ext2_fs.h $(top_builddir)/lib/ext2fs/ext2_types.h \
+ $(top_srcdir)/lib/ext2fs/ext2fs.h $(top_srcdir)/lib/ext2fs/ext3_extents.h \
+ $(top_srcdir)/lib/et/com_err.h $(top_srcdir)/lib/ext2fs/ext2_io.h \
+ $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(srcdir)/dqblk_v2.h \
+ $(srcdir)/quotaio_tree.h
+plausible.o: $(srcdir)/plausible.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/plausible.h \
+ $(top_srcdir)/lib/ext2fs/ext2fs.h $(top_builddir)/lib/ext2fs/ext2_types.h \
+ $(top_srcdir)/lib/ext2fs/ext2_fs.h $(top_srcdir)/lib/ext2fs/ext3_extents.h \
+ $(top_srcdir)/lib/et/com_err.h $(top_srcdir)/lib/ext2fs/ext2_io.h \
+ $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(srcdir)/nls-enable.h
+profile.o: $(srcdir)/profile.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(top_srcdir)/lib/et/com_err.h \
+ $(srcdir)/profile.h prof_err.h
+profile_helpers.o: $(srcdir)/profile_helpers.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(top_srcdir)/lib/et/com_err.h \
+ $(srcdir)/profile.h $(srcdir)/profile_helpers.h prof_err.h
+prof_err.o: prof_err.c
+quotaio.o: $(srcdir)/quotaio.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/common.h \
+ $(top_builddir)/lib/ext2fs/ext2_types.h $(srcdir)/quotaio.h \
+ $(top_srcdir)/lib/ext2fs/ext2_fs.h $(top_srcdir)/lib/ext2fs/ext2fs.h \
+ $(top_srcdir)/lib/ext2fs/ext3_extents.h $(top_srcdir)/lib/et/com_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_io.h $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(srcdir)/dqblk_v2.h \
+ $(srcdir)/quotaio_tree.h
+quotaio_tree.o: $(srcdir)/quotaio_tree.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/common.h \
+ $(top_builddir)/lib/ext2fs/ext2_types.h $(srcdir)/quotaio_tree.h \
+ $(srcdir)/quotaio.h $(top_srcdir)/lib/ext2fs/ext2_fs.h \
+ $(top_srcdir)/lib/ext2fs/ext2fs.h $(top_srcdir)/lib/ext2fs/ext3_extents.h \
+ $(top_srcdir)/lib/et/com_err.h $(top_srcdir)/lib/ext2fs/ext2_io.h \
+ $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(srcdir)/dqblk_v2.h
+quotaio_v2.o: $(srcdir)/quotaio_v2.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/common.h \
+ $(top_builddir)/lib/ext2fs/ext2_types.h $(srcdir)/quotaio_v2.h \
+ $(srcdir)/quotaio.h $(top_srcdir)/lib/ext2fs/ext2_fs.h \
+ $(top_srcdir)/lib/ext2fs/ext2fs.h $(top_srcdir)/lib/ext2fs/ext3_extents.h \
+ $(top_srcdir)/lib/et/com_err.h $(top_srcdir)/lib/ext2fs/ext2_io.h \
+ $(top_builddir)/lib/ext2fs/ext2_err.h \
+ $(top_srcdir)/lib/ext2fs/ext2_ext_attr.h $(top_srcdir)/lib/ext2fs/hashmap.h \
+ $(top_srcdir)/lib/ext2fs/bitops.h $(srcdir)/dqblk_v2.h \
+ $(srcdir)/quotaio_tree.h
+dict.o: $(srcdir)/dict.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/dict.h

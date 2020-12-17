@@ -1,9 +1,15 @@
-srcdir = e2fsprogs-1.45.6
-top_srcdir = e2fsprogs-1.45.6
-VPATH = e2fsprogs-1.45.6
-top_builddir = .
-my_dir = .
+#
+# Makefile for lib/et
+#
+
+srcdir = ../../e2fsprogs-1.45.6/lib/et
+top_srcdir = ../../e2fsprogs-1.45.6
+VPATH = ../../e2fsprogs-1.45.6/lib/et
+top_builddir = ../..
+my_dir = lib/et
 INSTALL = /usr/bin/install -c
+
+DEP_MAKEFILE = $(DEP_LIB_MAKEFILES)
 
 # Beginning of file MCONFIG
 
@@ -338,157 +344,195 @@ depend:: .depend
 
 # End of file MCONFIG
 
-% : %.sh
+all:: compile_et com_err.pc
 
-RESIZE_DIR= resize
-DEBUGFS_DIR= debugfs
-UUID_LIB_SUBDIR= lib/uuid
-BLKID_LIB_SUBDIR= lib/blkid
-E2SCRUB_DIR= scrub
-SUPPORT_LIB_SUBDIR= lib/support
-E2P_LIB_SUBDIR= lib/e2p
-EXT2FS_LIB_SUBDIR= lib/ext2fs
+OBJS= error_message.o et_name.o init_et.o com_err.o com_right.o
+SRCS = $(srcdir)/error_message.c $(srcdir)/et_name.c $(srcdir)/init_et.c \
+	$(srcdir)/com_err.c $(srcdir)/com_right.c
 
-LIB_SUBDIRS=lib/et lib/ss $(E2P_LIB_SUBDIR) $(UUID_LIB_SUBDIR) \
-	$(BLKID_LIB_SUBDIR) $(SUPPORT_LIB_SUBDIR) $(EXT2FS_LIB_SUBDIR) intl
+HFILES= com_err.h
+SHARE_FILES= et_c.awk et_h.awk
 
-PROG_SUBDIRS=e2fsck $(DEBUGFS_DIR) misc $(RESIZE_DIR) tests/progs po \
-	$(E2SCRUB_DIR)
+LIBRARY= libcom_err
+LIBDIR= et
 
-SUBDIRS=util $(LIB_SUBDIRS) $(PROG_SUBDIRS) tests
+ELF_VERSION = 2.1
+ELF_SO_VERSION = 2
+ELF_IMAGE = libcom_err
+ELF_MYDIR = et
+ELF_INSTALL_DIR = $(root_libdir)
+ELF_OTHER_LIBS = -lpthread
 
-SUBS= util/subst.conf lib/config.h $(top_builddir)/lib/dirpaths.h \
-	lib/ext2fs/ext2_types.h lib/blkid/blkid_types.h lib/uuid/uuid_types.h
+BSDLIB_VERSION = 1.1
+BSDLIB_IMAGE = libcom_err
+BSDLIB_MYDIR = et
+BSDLIB_INSTALL_DIR = $(root_libdir)
 
-TAR=tar
+#
+# what to build...
+#
+.c.o:
+	$(E) "	CC $<"
+	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -c $< -o $@
+	$(Q) $(CHECK_CMD) $(ALL_CFLAGS) $<
+	$(Q) $(CPPCHECK_CMD) $(CPPFLAGS) $<
+#	$(Q) $(CC) $(ALL_CFLAGS_STLIB) -g -pg -o profiled/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) -fPIC -shared -o elfshared/$*.o -c $<
+#	$(Q) $(CC) $(ALL_CFLAGS_SHLIB) $(BSDLIB_PIC_FLAG) -o pic/$*.o -c $<
 
-all:: subs
-	$(MAKE) libs
-	$(MAKE) progs
-	$(MAKE) docs
+all:: subdirs $(LIBRARY).a
 
-subs: $(DEP_SUBSTITUTE)
-	@for i in $(SUBS) ; do if test -d `dirname $$i` ; \
-		then $(MAKE) $$i || exit $$? ; fi ; done
-	@(if test -d lib/et ; then cd lib/et && $(MAKE) compile_et; fi)
-	@(if test -d lib/ext2fs ; then cd lib/ext2fs && $(MAKE) ext2_err.h; fi)
-	@(if test -d lib/support ; then cd lib/support && $(MAKE) prof_err.h; fi)
+install-shlibs-strip::
 
-progs: all-progs-recursive
-libs: all-libs-recursive
-all-progs-recursive all-libs-recursive:: subs
+install-shlibs::
 
-rpm:
-	sh contrib/build-rpm
+uninstall-shlibs::
 
-docs:
-	-@test -d doc && cd doc && $(MAKE) libext2fs.info
+real-subdirs::
 
-install-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) install-doc-libs
+subdirs:: Makefile
+	$(Q) $(MAKE) -s real-subdirs
+	$(Q) touch subdirs
 
-uninstall-doc-libs:
-	-@test -d doc && cd doc && $(MAKE) uninstall-doc-libs
+clean::
+	$(Q) $(RM) -f subdirs
 
-clean-doc:
-	-@test -d doc && cd doc && $(MAKE) clean
+$(LIBRARY).a: $(OBJS)
+	$(E) "	GEN_LIB $@"
+	$(Q) (if test -r $@; then $(RM) -f $@.bak && $(MV) $@ $@.bak; fi)
+	$(Q) $(ARGEN) $@ $(OBJS)
+	-@$(RANLIB) $@
+	$(Q) $(RM) -f ../$@
+	$(Q) (cd ..; $(LN) $(LINK_BUILD_FLAGS) \
+		`echo $(my_dir) | sed -e 's;lib/;;'`/$@ $@)
 
-distclean-doc:
-	-test -d doc && cd doc && $(MAKE) distclean
+$(LIB)/$(LIBRARY).a: $(LIBRARY).a
 
-install: subs all-libs-recursive install-progs-recursive \
-  install-shlibs-libs-recursive install-doc-libs
-	$(MAKE) install-libs
+compile_et: $(DEP_SUBSTITUTE) $(srcdir)/compile_et.sh.in
+	$(E) "	SUBST $@"
+	$(Q) $(SUBSTITUTE) $(srcdir)/compile_et.sh.in compile_et
+	$(Q) $(CHMOD) +x compile_et
 
-install-strip: subs all-libs-recursive install-strip-progs-recursive \
-  install-shlibs-strip-libs-recursive install-doc-libs
+DVI=texi2dvi
+DVIPS=dvips -o "$@"
+INFO=echo Makeinfo is missing. Info documentation will not be built.
+HTML=makeinfo --html --no-split
+PS2PDF=ps2pdf
 
-uninstall: uninstall-progs-recursive uninstall-shlibs-libs-recursive uninstall-doc-libs
+com_err.ps : com_err.dvi
+com_err.dvi: com_err.texinfo
 
-install-libs: install-libs-recursive
+com_err.info: $(srcdir)/com_err.texinfo
+	$(E) "	MAKEINFO $@"
+	-$(Q) $(INFO) $(srcdir)/com_err.texinfo
 
-uninstall-libs: uninstall-libs-recursive
+com_err.dvi: $(srcdir)/com_err.texinfo
+	$(E) "	TEXI2DVI $@"
+	-$(Q) $(DVI) $(srcdir)/com_err.texinfo
 
-coverage.txt: coverage.txt-recursive
+com_err.ps: com_err.dvi
+	$(E) "	DVIPS $@"
+	-$(Q) $(DVIPS) com_err.dvi
 
-check-recursive: all
+com_err.pdf: com_err.ps
+	$(E) "	PS2PDF $@"
+	-$(Q) $(PS2PDF) com_err.ps
 
-TAGS clean-recursive distclean-recursive depend-recursive fullcheck-recursive \
-  check-recursive mostlyclean-recursive realclean-recursive \
-  coverage.txt-recursive:
-	@for subdir in $(SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
+com_err.html: $(srcdir)/com_err.texinfo
+	$(E) "	MAKEINFO $@"
+	-$(Q) $(HTML) $(srcdir)/com_err.texinfo
+
+com_err.pc: $(srcdir)/com_err.pc.in $(top_builddir)/config.status
+	$(E) "	CONFIG.STATUS $@"
+	$(Q) cd $(top_builddir); CONFIG_FILES=lib/et/com_err.pc ./config.status
+
+#libcom_err.o:	$(LIBOBJS)
+#	$(LD) -r -s -o libcom_err.o $(LIBOBJS)
+#	chmod -x libcom_err.o
+
+TAGS:	$(SRCS)
+	$(TAGS) $(SRCS)
+
+installdirs::
+	$(E) "	MKDIR_P $(libdir) $(includedir)/et $(datadir)/et $(bindir) $(man1dir) $(man3dir)"
+	$(Q) $(MKDIR_P) $(DESTDIR)$(libdir) \
+		$(DESTDIR)$(includedir)/et $(DESTDIR)$(datadir)/et \
+		$(DESTDIR)$(bindir) $(DESTDIR)$(man1dir) \
+		$(DESTDIR)$(man3dir) $(DESTDIR)$(pkgconfigdir)
+
+install:: compile_et libcom_err.a $(HFILES) installdirs com_err.pc
+	$(E) "	INSTALL_DATA $(libdir)/libcom_err.a"
+	$(Q) $(INSTALL_DATA) libcom_err.a $(DESTDIR)$(libdir)/libcom_err.a
+	-$(Q) $(RANLIB) $(DESTDIR)$(libdir)/libcom_err.a
+	$(Q) $(CHMOD) $(LIBMODE) $(DESTDIR)$(libdir)/libcom_err.a
+	$(Q) for i in $(HFILES); do \
+		echo "	INSTALL_DATA $(includedir)/et/$$i"; \
+		$(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(includedir)/et/$$i; \
+	done
+	$(Q) (cd $(DESTDIR)$(includedir) ;\
+		$(LN) $(LINK_INSTALL_FLAGS) et/com_err.h . )
+	$(Q) for i in $(SHARE_FILES); do \
+		echo "	INSTALL_DATA $(datadir)/et/$$i"; \
+		$(INSTALL_DATA) $(srcdir)/$$i $(DESTDIR)$(datadir)/et/$$i; \
+	done
+	$(E) "	INSTALL_SCRIPT $(bindir)/compile_et"
+	$(Q) $(INSTALL_SCRIPT) compile_et $(DESTDIR)$(bindir)/compile_et
+	$(E) "	INSTALL_DATA $(man3dir)/com_err.3"
+	$(Q) $(INSTALL_DATA) $(srcdir)/com_err.3 $(DESTDIR)$(man3dir)/com_err.3
+	$(E) "	INSTALL_DATA $(man1dir)/compile_et.1"
+	$(Q) $(INSTALL_DATA) $(srcdir)/compile_et.1 \
+			$(DESTDIR)$(man1dir)/compile_et.1
+	$(E) "	INSTALL_DATA $(pkgconfigdir)/com_err.pc"
+	$(Q) $(INSTALL_DATA) com_err.pc $(DESTDIR)$(pkgconfigdir)/com_err.pc
+
+uninstall::
+	$(RM) -f $(DESTDIR)$(libdir)/libcom_err.a \
+		$(DESTDIR)$(bindir)/compile_et \
+		$(DESTDIR)$(pkgconfigdir)/com_err.pc
+	$(RM) -rf $(DESTDIR)$(includedir)/et $(DESTDIR)$(datadir)/et
+
+fullcheck check:: compile_et
+	for i in $(srcdir)/test_cases/*.et ; do \
+		t=`basename $$i | sed -e 's/.et//'`; \
+		_ET_DIR_OVERRIDE=$(srcdir) ./compile_et $$i ; \
+		diff -c $(srcdir)/test_cases/$$t.c $$t.c > $$t.failed; \
+		if [ $$? -ne 0 ]; then echo Test case $$t failed; exit 1 ; fi ; \
+		diff -c $(srcdir)/test_cases/$$t.h $$t.h >> $$t.failed; \
+		if [ $$? -ne 0 ]; then echo Test case $$t failed; exit 1 ; fi ; \
+		$(RM) -f $$t.c $$t.h $$t.failed; \
+		echo "Test case $$t succeeded" ; \
 	done
 
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
+clean::
+	$(RM) -f compile_et libcom_err.a libcom_err_p.a com_err.info
+	$(RM) -f $(OBJS) profiled/*
+	$(RM) -f *~ \#* *.bak *.otl *.aux *.toc *.PS *.dvi *.ps TAGS *.ln \
+		*.html *.cp *.fn *.fns *.ky *.log *.pc *.pg *.toc *.tp *.vr \
+		*.pdf
+	$(RM) -f ../libcom_err.a ../libcom_err_p.a
 
-
-all-progs-recursive install-progs-recursive install-strip-progs-recursive \
-  uninstall-progs-recursive coverage.txt-progs-recursive:: all-libs-recursive
-	@for subdir in $(PROG_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-progs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-all-libs-recursive install-libs-recursive install-strip-libs-recursive \
-  uninstall-libs-recursive install-shlibs-libs-recursive \
-  install-shlibs-strip-libs-recursive uninstall-shlibs-libs-recursive \
-  coverage.txt-libs-recursive::
-	@for subdir in $(LIB_SUBDIRS); do \
-	  if test -d $$subdir ; then \
-	    target=`echo $@|$(SED) 's/-libs-recursive//'`; \
-	    echo making $$target in $$subdir; \
-	    (cd $$subdir && $(MAKE) $$target) || exit 1; \
-	  fi ; \
-	done
-
-mostlyclean: mostlyclean-recursive mostlyclean-local
-
-clean:: clean-recursive clean-local clean-doc
-	$(RM) -f $(SUBS) 
-
-distclean: distclean-doc distclean-recursive
-	$(RM) -rf autom4te.cache ext2ed/Makefile po/stamp-po \
-		asm_types.h config.log public_config.h parse-types.log
-	$(MAKE) distclean-local 
-
-realclean: realclean-recursive realclean-local
-
-depend:: depend-recursive
-
-lib/ext2fs/ext2_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/ext2fs/ext2_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/ext2fs/ext2_types.h ./config.status
-
-lib/blkid/blkid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/blkid/blkid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/blkid/blkid_types.h ./config.status
-
-lib/uuid/uuid_types.h: $(DEP_SUBSTITUTE) asm_types.h \
-		$(srcdir)/lib/uuid/uuid_types.h.in
-	cd $(top_builddir); CONFIG_FILES=./lib/uuid/uuid_types.h ./config.status
-
-mostlyclean-local:
-	$(RM) -f \#* *~ *.orig core MAKELOG 
-
-clean-local: mostlyclean-local
-
-distclean-local: clean-local
-	$(RM) -f $(SUBS) $(SUBST_CONF) \
-		config.status config.log config.cache MCONFIG Makefile \
+mostlyclean:: clean
+distclean:: clean
+	$(RM) -f .depend Makefile com_err.pc \
 		$(srcdir)/TAGS $(srcdir)/Makefile.in.old
 
-realclean-local: distclean-local
-	$(RM) -f configure
+$(OBJS): subdirs
 
-check::	all check-recursive
-
-fullcheck:: all fullcheck-recursive
+# +++ Dependency line eater +++
+# 
+# Makefile dependencies follow.  This must be the last section in
+# the Makefile.in file
+#
+error_message.o: $(srcdir)/error_message.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/com_err.h $(srcdir)/error_table.h \
+ $(srcdir)/internal.h
+et_name.o: $(srcdir)/et_name.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/com_err.h $(srcdir)/error_table.h \
+ $(srcdir)/internal.h
+init_et.o: $(srcdir)/init_et.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/com_err.h $(srcdir)/error_table.h
+com_err.o: $(srcdir)/com_err.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/com_err.h $(srcdir)/error_table.h \
+ $(srcdir)/internal.h
+com_right.o: $(srcdir)/com_right.c $(top_builddir)/lib/config.h \
+ $(top_builddir)/lib/dirpaths.h $(srcdir)/com_err.h $(srcdir)/error_table.h
