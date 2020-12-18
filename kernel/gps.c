@@ -15,6 +15,8 @@
 #define PATH_LENGTH_MAX 1024
 #define EARTH_RADIUS 6371
 
+DEFINE_SPINLOCK(geo_lock);
+
 struct gps_location curr_loc = {
     .lat_integer = 0,
     .lat_fractional = 0,
@@ -28,7 +30,7 @@ int add_gps(int int1, int frac1, int int2, int frac2, int *frac)
     int ret;
     *frac = (frac1 + frac2) % FRAC_MAX;
     ret = int1 + int2 + (frac1 + frac2) / FRAC_MAX;
-    printk(KERN_INFO "%d.%06d + %d.%6d = %d.%06d", int1, frac1, int2, frac2, ret, *frac);
+    // printk(KERN_INFO "%d.%06d + %d.%6d = %d.%06d", int1, frac1, int2, frac2, ret, *frac);
     return ret;
 }
 
@@ -42,7 +44,7 @@ int sub_gps(int int1, int frac1, int int2, int frac2, int *frac)
         ret -= 1;
         *frac += FRAC_MAX;
     }
-    printk(KERN_INFO "%d.%06d - %d.%6d = %d.%06d", int1, frac1, int2, frac2, ret, *frac);
+    // printk(KERN_INFO "%d.%06d - %d.%6d = %d.%06d", int1, frac1, int2, frac2, ret, *frac);
     return ret;
 }
 
@@ -55,12 +57,16 @@ int mul_gps(int int1, int frac1, int int2, int frac2, int *frac)
     hilo = (__s64)int1 * frac2;
     lohi = (__s64)frac1 * int2;
     lolo = (__s64)frac1 * (__s64)frac2;
-    printk(KERN_INFO "hihi: %d, hilo: %lld, lohi: %lld, lolo: %lld", hihi, hilo, lohi, lolo);
+    // printk(KERN_INFO "hihi: %d, hilo: %lld, lohi: %lld, lolo: %lld", hihi, hilo, lohi, lolo);
     
     *frac = (hilo + lohi) % FRAC_MAX + (lolo % FRAC_MAX >= FRAC_MAX / 2) + (lolo / FRAC_MAX);
     ret = hihi + (int)((hilo + lohi) / FRAC_MAX) + (*frac > FRAC_MAX);
+    if(*frac < 0){
+        ret--;
+        *frac += FRAC_MAX;
+    }
     
-    printk("%d.%06d * %d.%6d = %d.%06lld", int1, frac1, int2, frac2, ret, *frac);
+    // printk("%d.%06d * %d.%6d = %d.%06lld", int1, frac1, int2, frac2, ret, *frac);
 
     return ret;
 }
@@ -69,7 +75,7 @@ int deg2rad_gps(int deg_i, int deg_f, int *frac)
 {
     int ret;
     ret = mul_gps(deg_i, deg_f, 0, 17453, frac);
-    printk(KERN_INFO "%d.%06d (deg) = %d.%06d (rad)", deg_i, deg_f, ret, *frac);
+    // printk(KERN_INFO "%d.%06d (deg) = %d.%06d (rad)", deg_i, deg_f, ret, *frac);
     return ret;
 }
 
@@ -120,7 +126,7 @@ int sin_gps(int x_i, int x_frac, int *ret_frac)
             rad_x_i = mul_gps(rad_x_i, frac, rad_x_origin_i, rad_x_origin_frac, &rad_x_frac);
         }
         frac = rad_x_frac;
-        printk(KERN_INFO "divisor: %d\n", divisor);
+        // printk(KERN_INFO "divisor: %d\n", divisor);
         add_term = mul_gps(rad_x_i, frac, 0, FRAC_MAX / divisor, &add_term_frac);
         sign = -sign;
         frac = *ret_frac;
@@ -138,7 +144,7 @@ int sin_gps(int x_i, int x_frac, int *ret_frac)
         frac = *ret_frac;
         ret = sub_gps(0, 0, ret, frac, ret_frac);
     }
-    printk(KERN_INFO "sin(%d.%06d) = %d.%06d", x_i, x_frac, ret, *ret_frac);
+    // printk(KERN_INFO "sin(%d.%06d) = %d.%06d", x_i, x_frac, ret, *ret_frac);
     return ret;
 }
 
@@ -185,7 +191,7 @@ int cos_gps(int x_i, int x_frac, int *ret_frac)
         }
 
         frac = rad_x_frac;
-        printk(KERN_INFO "divisor: %d\n", divisor);
+        // printk(KERN_INFO "divisor: %d\n", divisor);
         add_term = mul_gps(rad_x_i, frac, 0, FRAC_MAX / divisor, &add_term_frac);
         sign = -sign;
         frac = *ret_frac;
@@ -199,7 +205,7 @@ int cos_gps(int x_i, int x_frac, int *ret_frac)
         }
     }
 
-    printk(KERN_INFO "cos(%d.%06d) = %d.%06d", x_i, x_frac, ret, *ret_frac);
+    // printk(KERN_INFO "cos(%d.%06d) = %d.%06d", x_i, x_frac, ret, *ret_frac);
     return ret;
 }
 
@@ -249,10 +255,10 @@ int acos_gps(int x_i, int x_frac, int *ret_frac)
         frac = x_frac;
         add_term = mul_gps(x_i, frac, 0, coeff, &add_term_frac);
         frac = *ret_frac;
-        printk(KERN_INFO "add_term_acos: %d, add_term_frac:%d,\n", add_term, add_term_frac);
+        // printk(KERN_INFO "add_term_acos: %d, add_term_frac:%d,\n", add_term, add_term_frac);
         ret = sub_gps(ret, frac, add_term, add_term_frac, ret_frac);
     }
-    printk(KERN_INFO "acos(%d.%06d) = %d.%06d", x_origin_i, x_origin_frac, ret, *ret_frac);
+    // printk(KERN_INFO "acos(%d.%06d) = %d.%06d", x_origin_i, x_origin_frac, ret, *ret_frac);
     return ret;
 }
 
@@ -262,90 +268,114 @@ int not_accessible_loc(struct inode *inode)
     file_gps = (struct gps_location *)kmalloc(sizeof(struct gps_location), GFP_KERNEL);
     if (!file_gps)
     {
-        printk(KERN_ALERT "is_accessible_loc: kmalloc failed");
+        // printk(KERN_ALERT "is_accessible_loc: kmalloc failed");
         return -1;
     }
     if (!(inode->i_op->get_gps_location))
     {
-        printk(KERN_ALERT "is_accessible_loc: get_gps_location not defined\n");
+        // printk(KERN_ALERT "is_accessible_loc: get_gps_location not defined\n");
         return -ENODEV;
     }
     if (inode->i_op->get_gps_location(inode, file_gps))
     {
-        printk(KERN_ALERT "is_accessible_loc: error from get_gps_location at inode");
+        // printk(KERN_ALERT "is_accessible_loc: error from get_gps_location at inode");
         return -1;
     }
 
     if (curr_loc.accuracy == file_gps->accuracy && curr_loc.lng_integer == file_gps->lng_integer && curr_loc.lat_integer == file_gps->lat_integer &&
         curr_loc.lat_fractional == file_gps->lat_fractional && curr_loc.lng_fractional == file_gps->lng_fractional)
     {
-        printk(KERN_INFO "GPS location of the file is accessible.\n");
+        // printk(KERN_INFO "GPS location of the file is accessible.\n");
         return 0;
     }
     // calculate distance
 
-    int theta_integer, theta_fractional;
+    int long_diff_integer, long_diff_fractional;
     if (curr_loc.lng_integer > file_gps->lng_integer)
     {
-        theta_integer = sub_gps(curr_loc.lng_integer, curr_loc.lng_fractional, file_gps->lng_integer, file_gps->lng_fractional, &theta_fractional);
+        long_diff_integer = sub_gps(curr_loc.lng_integer, curr_loc.lng_fractional, file_gps->lng_integer, file_gps->lng_fractional, &long_diff_fractional);
     }
     else if (curr_loc.lng_integer < file_gps->lng_integer)
     {
-        theta_integer = sub_gps(file_gps->lng_integer, file_gps->lng_fractional, curr_loc.lng_integer, curr_loc.lng_fractional, &theta_fractional);
+        long_diff_integer = sub_gps(file_gps->lng_integer, file_gps->lng_fractional, curr_loc.lng_integer, curr_loc.lng_fractional, &long_diff_fractional);
     }
     else
     {
-        theta_integer = (curr_loc.lng_fractional > file_gps->lng_fractional) ? sub_gps(curr_loc.lng_integer, curr_loc.lng_fractional, file_gps->lng_integer, file_gps->lng_fractional, &theta_fractional) : sub_gps(file_gps->lng_integer, file_gps->lng_fractional, curr_loc.lng_integer, curr_loc.lng_fractional, &theta_fractional);
+        long_diff_integer = (curr_loc.lng_fractional > file_gps->lng_fractional) ? sub_gps(curr_loc.lng_integer, curr_loc.lng_fractional, file_gps->lng_integer, file_gps->lng_fractional, &long_diff_fractional) : 
+        sub_gps(file_gps->lat_integer, file_gps->lng_fractional, curr_loc.lat_integer, curr_loc.lng_fractional, &long_diff_fractional);
     }
 
-    printk(KERN_INFO "theta_integer: %d, theta_fractional: %d\n", theta_integer, theta_fractional);
+    int lat_diff_integer, lat_diff_fractional;
+    if (curr_loc.lat_integer > file_gps->lat_integer)
+    {
+        lat_diff_integer = sub_gps(curr_loc.lat_integer, curr_loc.lat_fractional, file_gps->lat_integer, file_gps->lat_fractional, &lat_diff_fractional);
+    }
+    else if (curr_loc.lat_integer < file_gps->lat_integer)
+    {
+        lat_diff_integer = sub_gps(file_gps->lat_integer, file_gps->lat_fractional, curr_loc.lat_integer, curr_loc.lat_fractional, &lat_diff_fractional);
+    }
+    else
+    {
+        lat_diff_integer = (curr_loc.lat_fractional > file_gps->lat_fractional) ? sub_gps(curr_loc.lat_integer, curr_loc.lat_fractional, file_gps->lat_integer, file_gps->lat_fractional, &long_diff_fractional) : 
+        sub_gps(file_gps->lat_integer, file_gps->lat_fractional, curr_loc.lat_integer, curr_loc.lat_fractional, &lat_diff_fractional);
+    }
+
+    // printk(KERN_INFO "long_diff_integer: %d, long_diff_fractional: %d\n", long_diff_integer, long_diff_fractional);
+    // printk(KERN_INFO "lat_diff_integer: %d, lat_diff_fractional: %d\n", lat_diff_integer, lat_diff_fractional);
+
     int cos_curr_loc_lat_integer, cos_curr_loc_lat_fractional;
-    int cos_file_lat_integer, cos_file_lat_fractional;
     cos_curr_loc_lat_integer = cos_gps(curr_loc.lat_integer, curr_loc.lat_fractional, &cos_curr_loc_lat_fractional);
+    // printk(KERN_INFO "cos_curr_loc_lat_integer: %d, cos_curr_loc_lat_fractional: %d\n", cos_curr_loc_lat_integer, cos_curr_loc_lat_fractional);
+
+    int cos_file_lat_integer, cos_file_lat_fractional;
     cos_file_lat_integer = cos_gps(file_gps->lat_integer, file_gps->lat_fractional, &cos_file_lat_fractional);
-    printk(KERN_INFO "cos_curr_loc_lat_integer: %d, cos_curr_loc_lat_fractional: %d\n", cos_curr_loc_lat_integer, cos_curr_loc_lat_fractional);
-    printk(KERN_INFO "cos_file_lat_integer: %d, cos_file_lat_fractional: %d\n", cos_file_lat_integer, cos_file_lat_fractional);
+    // printk(KERN_INFO "cos_file_lat_integer: %d, cos_file_lat_fractional: %d\n", cos_file_lat_integer, cos_file_lat_fractional);
 
-    int sin_curr_loc_lat_integer, sin_curr_loc_lat_fractional;
-    int sin_file_lat_integer, sin_file_lat_fractional;
-    sin_curr_loc_lat_integer = sin_gps(curr_loc.lat_integer, curr_loc.lat_fractional, &sin_curr_loc_lat_fractional);
-    sin_file_lat_integer = sin_gps(file_gps->lat_integer, file_gps->lat_fractional, &sin_file_lat_fractional);
-    printk(KERN_INFO "sin_curr_loc_lat_integer: %d, sin_curr_loc_lat_fractional: %d\n", sin_curr_loc_lat_integer, sin_curr_loc_lat_fractional);
-    printk(KERN_INFO "sin_file_lat_integer: %d, sin_file_lat_fractional: %d\n", sin_file_lat_integer, sin_file_lat_fractional);
+    int cos_lat_diff_integer, cos_lat_diff_fractional;
+    cos_lat_diff_integer = cos_gps(lat_diff_integer, lat_diff_fractional, &cos_lat_diff_fractional);
+    // printk(KERN_INFO "cos_lat_diff_integer: %d, cos_lat_diff_fractional: %d\n", cos_lat_diff_integer, cos_lat_diff_fractional);
 
-    int cos_theta_integer, cos_theta_fractional;
-    cos_theta_integer = cos_gps(theta_integer, theta_fractional, &cos_theta_fractional);
-    printk(KERN_INFO "cos_theta_integer: %d, cos_theta_fractional: %d\n", cos_theta_integer, cos_theta_fractional);
+    int cos_long_diff_integer, cos_long_diff_fractional;
+    cos_long_diff_integer = cos_gps(long_diff_integer, long_diff_fractional, &cos_long_diff_fractional);
+    // printk(KERN_INFO "cos_long_diff_integer: %d, cos_long_diff_fractional: %d\n", cos_long_diff_integer, cos_long_diff_fractional);
 
     int cos_cos_integer, cos_cos_fractional;
     cos_cos_integer = mul_gps(cos_curr_loc_lat_integer, cos_curr_loc_lat_fractional, cos_file_lat_integer, cos_file_lat_fractional, &cos_cos_fractional);
-    printk(KERN_INFO "cos_cos_integer: %d, cos_cos_fractional: %d\n", cos_cos_integer, cos_cos_fractional);
+    // printk(KERN_INFO "cos_cos_integer: %d, cos_cos_fractional: %d\n", cos_cos_integer, cos_cos_fractional);
 
-    int sin_sin_integer, sin_sin_fractional;
-    sin_sin_integer = mul_gps(sin_curr_loc_lat_integer, sin_curr_loc_lat_fractional, sin_file_lat_integer, sin_file_lat_fractional, &sin_sin_fractional);
-    printk(KERN_INFO "sin_sin_integer: %d, sin_sin_fractional: %d\n", sin_sin_integer, sin_sin_fractional);
+    int haversine_lat_integer, haversine_lat_fractional;
+    haversine_lat_integer = sub_gps(1, 0, cos_lat_diff_integer, cos_lat_diff_fractional, &haversine_lat_fractional);
+    // printk(KERN_INFO "haversine_lat_integer: %d, haversine_lat_fractional: %d\n", haversine_lat_integer, haversine_lat_fractional);
 
-    int sin_sin_cos_integer, sin_sin_cos_fractional;
-    sin_sin_cos_integer = mul_gps(sin_sin_integer, sin_sin_fractional, cos_theta_integer, cos_theta_fractional, &sin_sin_cos_fractional);
-    printk(KERN_INFO "sin_sin_cos_integer: %d, sin_sin_cos_fractional: %d\n", sin_sin_cos_integer, sin_sin_cos_fractional);
+    int haversine_long_integer, haversine_long_fractional;
+    haversine_long_integer = sub_gps(1, 0, cos_long_diff_integer, cos_long_diff_fractional, &haversine_long_fractional);
+    // printk(KERN_INFO "haversine_long_integer: %d, haversine_long_fractional: %d\n", haversine_long_integer, haversine_long_fractional);
 
-    int cos_dist_integer, cos_dist_fractional;
-    cos_dist_integer = add_gps(cos_cos_integer, cos_cos_fractional, sin_sin_cos_integer, sin_sin_cos_fractional, &cos_dist_fractional);
-    printk(KERN_INFO "cos_dist_integer: %d, cos_dist_fractional: %d\n", cos_dist_integer, cos_dist_fractional);
+    int cos_cos_hav_integer, cos_cos_hav_fractional;
+    cos_cos_hav_integer = mul_gps(cos_cos_integer, cos_cos_fractional, haversine_long_integer, haversine_long_fractional, &cos_cos_hav_fractional);
+    // printk(KERN_INFO "cos_cos_hav_integer: %d, cos_cos_hav_fractional: %d\n", cos_cos_hav_integer, cos_cos_hav_fractional);
+
+    int haversine_all_integer, haversine_all_fractional;    //2y
+    haversine_all_integer = add_gps(cos_cos_hav_integer, cos_cos_hav_fractional, haversine_lat_integer, haversine_lat_fractional, &haversine_all_fractional);
+    // printk(KERN_INFO "haversine_all_integer: %d, haversine_all_fractional: %d\n", haversine_all_integer, haversine_all_fractional);
+
+    int acos_arg_integer, acos_arg_fractional;    //1-2y
+    acos_arg_integer = sub_gps(1, 0, haversine_all_integer, haversine_all_fractional, &acos_arg_fractional);
+    // printk(KERN_INFO "acos_arg_integer: %d, acos_arg_fractional: %d\n", acos_arg_integer, acos_arg_fractional);
 
     int degree_dist_integer, degree_dist_fractional;
-    degree_dist_integer = acos_gps(cos_dist_integer, cos_dist_fractional, &degree_dist_fractional);
-    printk(KERN_INFO "degree_dist_integer: %d, degree_dist_fractional: %d\n", degree_dist_integer, degree_dist_fractional);
+    degree_dist_integer = acos_gps(acos_arg_integer, acos_arg_fractional, &degree_dist_fractional);
+    // printk(KERN_INFO "degree_dist_integer: %d, degree_dist_fractional: %d\n", degree_dist_integer, degree_dist_fractional);
 
     int dist_integer, dist_fractional;
     dist_integer = mul_gps(degree_dist_integer, degree_dist_fractional, EARTH_RADIUS, 0, &dist_fractional);
-    printk(KERN_INFO "dist_integer: %d, dist_fractional: %d\n", dist_integer, dist_fractional);
+    // printk(KERN_INFO "dist_integer: %d, dist_fractional: %d\n", dist_integer, dist_fractional);
 
     int acc_curr, acc_file;
     acc_curr = curr_loc.accuracy;
     acc_file = file_gps->accuracy;
-    printk(KERN_INFO "accuracy of file: %d, accuracy of latest location: %d\n", acc_file, acc_curr);
-    printk(KERN_INFO "Calculated distance: %d.%06d\n", dist_integer, dist_fractional);
+    // printk(KERN_INFO "accuracy of file: %d, accuracy of latest location: %d\n", acc_file, acc_curr);
+    // printk(KERN_INFO "Calculated distance: %d.%06d\n", dist_integer, dist_fractional);
     if (acc_curr + acc_file > dist_integer)
     {
         printk(KERN_INFO "GPS location of the file is accessible.\n");
@@ -388,12 +418,13 @@ long sys_set_gps_location(struct gps_location __user *loc)
     {
         return -5;
     }
-
+    spin_lock(&geo_lock);
     curr_loc.lat_integer = loc_kern->lat_integer;
     curr_loc.lat_fractional = loc_kern->lat_fractional;
     curr_loc.lng_integer = loc_kern->lng_integer;
     curr_loc.lng_fractional = loc_kern->lng_fractional;
     curr_loc.accuracy = loc_kern->accuracy;
+    spin_unlock(&geo_lock);
     kfree(loc_kern);
     return 0;
 }

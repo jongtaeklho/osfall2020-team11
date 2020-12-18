@@ -1680,12 +1680,14 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 
 int ext2_set_gps_location(struct inode *inode){
 	struct ext2_inode_info *ei = EXT2_I(inode);
-
+	
+	spin_lock(&geo_lock);
 	ei->i_lat_integer = (curr_loc.lat_integer);
 	ei->i_lat_fractional = (curr_loc.lat_fractional);
 	ei->i_lng_integer = (curr_loc.lng_integer);
 	ei->i_lng_fractional = (curr_loc.lng_fractional);
 	ei->i_accuracy = (curr_loc.accuracy);
+	spin_unlock(&geo_lock);
 	return 0;
 }
 int ext2_get_gps_location(struct inode *inode, struct gps_location *loc){
@@ -1694,24 +1696,23 @@ int ext2_get_gps_location(struct inode *inode, struct gps_location *loc){
         return -1;
     }
 	struct ext2_inode_info *ei = EXT2_I(inode);
-	printk(KERN_ALERT "starting get_gps_location\n");
+	// printk(KERN_ALERT "starting get_gps_location\n");
 	loc->lat_integer = (ei->i_lat_integer);
 	loc->lat_fractional = (ei->i_lat_fractional);
 	loc->lng_integer = (ei->i_lng_integer);
 	loc->lng_fractional = (ei->i_lng_fractional);
 	loc->accuracy = (ei->i_accuracy);
-	printk(KERN_ALERT "finishing get_gps_location\n");
+	// printk(KERN_ALERT "finishing get_gps_location\n");
 
 	return 0;
 }
 int ext2_check_permission(struct inode *inode, int mask){
 	int perm;
-	if(perm = generic_permission(inode, mask)){
-		return perm;
+	if(!(perm = general_permission(inode, mask))){
+		if(not_accessible_loc(inode)){
+			return -EACCES;
+		}
 	}
 
-	if(not_accessible_loc(inode)){
-		return -EACCES;
-	}
 	return perm;
 }

@@ -18,6 +18,7 @@ int acos_gps(int x_i, int x_frac, int *ret_frac);
 int not_accessible_loc(struct inode *inode);
 long sys_set_gps_location(struct gps_location __user *loc);
 long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc);
-extern struct gps_location curr_loc;
 
+extern struct gps_location curr_loc;
+extern spinlock_t geo_lock;
 #endif
