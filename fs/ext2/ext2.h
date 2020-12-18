@@ -355,11 +355,11 @@ struct ext2_inode {
 
 
 
-	__u32	i_lat_integer;
-	__u32	i_lat_fractional;
-	__u32	i_lng_integer;
-	__u32	i_lng_fractional;
-	__u32	i_accuracy;
+	__s32	i_lat_integer;
+	__s32	i_lat_fractional;
+	__s32	i_lng_integer;
+	__s32	i_lng_fractional;
+	__s32	i_accuracy;
 };
 
 #define i_size_high	i_dir_acl

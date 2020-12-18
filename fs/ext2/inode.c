@@ -1710,7 +1710,7 @@ int ext2_check_permission(struct inode *inode, int mask){
 		return perm;
 	}
 
-	if(!is_accessible_loc(inode)){
+	if(not_accessible_loc(inode)){
 		return -EACCES;
 	}
 	return perm;

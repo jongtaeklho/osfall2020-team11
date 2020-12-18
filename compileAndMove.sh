@@ -5,5 +5,5 @@ sudo mount ../tizen-image/rootfs.img mnt_dir
 sudo mv gpsupdate.o file_loc.o mnt_dir/root
 sudo cp proj4.fs mnt_dir/root
 sudo umount mnt_dir
-
+sleep 1
 bash qemu.sh
