@@ -1432,7 +1432,7 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 		goto bad_inode;
 	}
 
-	/* os project 4 */
+	/* ext2_iget */
 	ei->i_lat_integer = le32_to_cpu(raw_inode->i_lat_integer);
     ei->i_lat_fractional = le32_to_cpu(raw_inode->i_lat_fractional);
 	ei->i_lng_integer = le32_to_cpu(raw_inode->i_lng_integer);
@@ -1569,7 +1569,7 @@ static int __ext2_write_inode(struct inode *inode, int do_sync)
 		raw_inode->i_uid_high = 0;
 		raw_inode->i_gid_high = 0;
 	}
-
+	/* __ext2_write_inode */
  	raw_inode->i_lat_integer = cpu_to_le32(ei->i_lat_integer);
 	raw_inode->i_lat_fractional = cpu_to_le32(ei->i_lat_fractional);
 	raw_inode->i_lng_integer = cpu_to_le32(ei->i_lng_integer);
@@ -1680,7 +1680,7 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 
 int ext2_set_gps_location(struct inode *inode){
 	struct ext2_inode_info *ei = EXT2_I(inode);
-	
+
 	spin_lock(&geo_lock);
 	ei->i_lat_integer = (curr_loc.lat_integer);
 	ei->i_lat_fractional = (curr_loc.lat_fractional);

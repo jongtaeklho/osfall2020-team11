@@ -432,6 +432,7 @@ struct ext2_inode {
 		} hurd2;
 	} osd2;				/* OS dependent 2 */
 
+	/* struct ext2_inode */
 	__s32	i_lat_integer;
 	__s32	i_lat_fractional;
 	__s32	i_lng_integer;

@@ -79,75 +79,6 @@ int deg2rad_gps(int deg_i, int deg_f, int *frac)
     return ret;
 }
 
-int sin_gps(int x_i, int x_frac, int *ret_frac)
-{
-    int ret, rad_x_i, deg_x_i;
-    int rad_x_frac, deg_x_frac;
-    int add_term;
-    int add_term_frac;
-    int frac;
-    int i, j;
-    int divisor;
-    int sign;
-    int is_negative;
-    ret = 0;
-    divisor = 1;
-
-    if (x_i < 0)
-    {
-        is_negative = 1;
-        deg_x_i = sub_gps(0, 0, x_i, x_frac, &deg_x_frac);
-    }
-    else
-    {
-        is_negative = 0;
-        deg_x_i = x_i;
-        deg_x_frac = x_frac;
-    }
-
-    if (x_i >= 90)
-    {
-        deg_x_i = sub_gps(180, 0, deg_x_i, deg_x_frac, &deg_x_frac);
-    }
-    rad_x_i = deg2rad_gps(deg_x_i, deg_x_frac, &rad_x_frac);
-    ret = rad_x_i;
-    *ret_frac = rad_x_frac;
-    int rad_x_origin_i, rad_x_origin_frac;
-    rad_x_origin_i = rad_x_i;
-    rad_x_origin_frac = rad_x_frac;
-    j = 2;
-    sign = 1;
-    for (i = 3; i < 19; i += 2)
-    {
-        for (; j <= i; j++)
-        {
-            frac = rad_x_frac;
-            divisor *= j;
-            rad_x_i = mul_gps(rad_x_i, frac, rad_x_origin_i, rad_x_origin_frac, &rad_x_frac);
-        }
-        frac = rad_x_frac;
-        // printk(KERN_INFO "divisor: %d\n", divisor);
-        add_term = mul_gps(rad_x_i, frac, 0, FRAC_MAX / divisor, &add_term_frac);
-        sign = -sign;
-        frac = *ret_frac;
-        if (sign > 0)
-        {
-            ret = add_gps(ret, frac, add_term, add_term_frac, ret_frac);
-        }
-        else
-        {
-            ret = sub_gps(ret, frac, add_term, add_term_frac, ret_frac);
-        }
-    }
-    if (is_negative)
-    {
-        frac = *ret_frac;
-        ret = sub_gps(0, 0, ret, frac, ret_frac);
-    }
-    // printk(KERN_INFO "sin(%d.%06d) = %d.%06d", x_i, x_frac, ret, *ret_frac);
-    return ret;
-}
-
 int cos_gps(int x_i, int x_frac, int *ret_frac)
 {
     int ret, rad_x_i, deg_x_i;
@@ -486,7 +417,6 @@ long sys_get_gps_location(const char __user *pathname, struct gps_location __use
         printk(KERN_ALERT "sys_get_gps_location: no permission to read inode\n");
         return -EACCES;
     }
-
     loc_kern = (struct gps_location *)kmalloc(sizeof(struct gps_location), GFP_KERNEL);
     if (!loc_kern)
     {
