@@ -1708,7 +1708,7 @@ int ext2_get_gps_location(struct inode *inode, struct gps_location *loc){
 }
 int ext2_check_permission(struct inode *inode, int mask){
 	int perm;
-	if(!(perm = general_permission(inode, mask))){
+	if(!(perm = generic_permission(inode, mask))){
 		if(not_accessible_loc(inode)){
 			return -EACCES;
 		}
