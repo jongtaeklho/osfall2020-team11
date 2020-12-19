@@ -98,33 +98,7 @@ inode에 정보를 쓰거나 새로운 inode를 만들 때 gps location을 쓰�
 `kernel/gps.c`에 정의된 `not_accessible_loc` 함수는 inode 구조체를 입력받아 해당 inode가 가리키는 파일이 커널에 저장된 최근 위치에서 접근 가능한지 확인한다.  
 이를 위해서는 두 gps 위치 사이의 거리를 계산해야 한다.  
 계산에서는 아래의 haversine 공식을 이용하였다.  
-$ hav {\theta}  = sin^2{\theta \over 2} = { 1 - cos{\theta }} over {2}$  
-newline
-hav {%theta}  = hav( %phi_2 - %phi_1 ) + cos{ %phi_1 }cos{ %phi_2 }hav( %lambda_2 - %lambda_1 )
-newline
-hav {%theta} = { 1 - cos(%phi_2 - %phi_1 )} over 2 + cos{ %phi_1 }cos{ %phi_2 }{ 1 - cos(%lambda_2 - %lambda_1 )} over 2
-newline
-
-newline
-d = {2R}arcsin{ sqrt{hav{%theta}} }
-newline
-dlrarrow sin{ d over {2R} } = sqrt{ hav{%theta} }
-newline
-dlrarrow hav{%theta} = sin^2{ d over {2R} }
-newline
-dlrarrow hav{%theta} = { 1 - cos{d over R }} over 2
-newline
-dlrarrow cos{ d over R } = 1 - 2hav{%theta}
-newline
-dlrarrow d = Rarccos(1 - 2hav{%theta} ) 
-newline
-dlrarrow d = Rarccos( cos(%phi_2 - %phi_1 ) - cos{ %phi_1 }cos{ %phi_2 }( 1 - cos(%lambda_2 - %lambda_1 )) )$
-```
-// phi1, phi2: latitude of each gps location
-// lambda1, lambda2: longitude of each gps location
-    $ $
-    hav(theta) = hav(phi2 - phi1) + 
-``` 
+![Screenshot from 2020-12-19 23-21-31](https://user-images.githubusercontent.com/48852336/102691604-021a6300-4251-11eb-9af5-6c79c2d3fb2e.png)
 
 haversine을 이용해 두 점 사이 거리를 계산하려면 cos, arccos의 계산이 필요하다. 커널에서는 floating point 연산이 불가능하기 때문에, 원하는 계산을 위해서는 gps location에 대해 사칙 연산 및 cos, arccos를 계산하는 함수를 만들어야 한다. 이를 위해 덧셈, 뺄셈, 곱셈, cos, arccos를 계산하는 함수와 degree 단위를 radian으로 변경하는 함수를 `kernel/gps.c`에 추가하였다.
 ```C
@@ -136,6 +110,8 @@ int deg2rad_gps(int deg_i, int deg_f, int *frac);
 int cos_gps(int x_i, int x_frac, int *ret_frac);
 int acos_gps(int x_i, int x_frac, int *ret_frac);
 ```
+이 때, cos 및 acos는 아래의 테일러 급수를 통해 계산하였다.
+![Screenshot from 2020-12-19 23-21-46](https://user-images.githubusercontent.com/48852336/102691646-4b6ab280-4251-11eb-80e4-912ab24946a3.png)
 
 ### Test files
 `test/gpsupdate.c`는 위도, 경도 및 정확도를 입력받아 커널의 최근 위치 정보에 넣는다. 커널에 위치 정보를 넣는 과정은 앞서 만든 `sys_set_gps_location` 시스템 콜을 이용한다.  
